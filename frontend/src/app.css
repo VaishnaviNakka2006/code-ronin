@@ -1,0 +1,38 @@
+@import '@fontsource/fira-mono';
+@import '@fontsource/inter';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-neon-dark text-white font-sans;
+    background-image: radial-gradient(circle at 25% 50%, rgba(0,243,255,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  ::selection {
+    @apply bg-neon-cyan text-black;
+  }
+}
+
+@layer components {
+  .glow-text {
+    text-shadow: 0 0 5px #00f3ff, 0 0 10px #00f3ff;
+  }
+  .cyber-border {
+    @apply border border-neon-cyan shadow-[0_0_10px_rgba(0,243,255,0.5)];
+  }
+  .scan-line {
+    background: linear-gradient(to bottom, transparent 0%, rgba(0,243,255,0.1) 50%, transparent 100%);
+    background-size: 100% 200%;
+    animation: scan 8s linear infinite;
+  }
+}
+
+.glow-text {
+  text-shadow:
+    0 0 5px #00f3ff,
+    0 0 10px #00f3ff,
+    0 0 20px #00f3ff;
+}
