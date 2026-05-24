@@ -1,8 +1,19 @@
 from typing import Dict, Any, List
 
 from app.db import supabase
-from app.services.execution.subprocess_runner import SubprocessRunner
+from app.config import USE_DOCKER
 
+if USE_DOCKER:
+
+    from app.services.execution.docker_runner import DockerRunner
+
+    _runner = DockerRunner()
+
+else:
+
+    from app.services.execution.subprocess_runner import SubprocessRunner
+
+    _runner = SubprocessRunner()
 
 class MissionEngine:
 
@@ -81,13 +92,14 @@ class MissionEngine:
             full_code = (
                 user_code
                 + "\n\n"
-                + test_input
+                + (test_input or "")
             )
 
             # Execute code
             actual_output = (
-                SubprocessRunner.execute(
-                    full_code
+                _runner.execute(
+                    full_code,
+                    tc.get("input") or ""
                 )
             )
 

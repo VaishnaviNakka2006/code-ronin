@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+# Create non-root user
+RUN useradd -m -u 1000 sandbox
+
+# Disable dangerous modules
+RUN echo "import builtins; blocked=['os','subprocess','socket','shutil']; real_import=builtins.__import__; builtins.__import__=lambda name,*a,**k: (_ for _ in ()).throw(ImportError(f'Module {name} blocked')) if name in blocked else real_import(name,*a,**k)" > /usr/local/lib/python3.11/site-packages/sitecustomize.py
+
+WORKDIR /sandbox
+
+# Switch to safe user AFTER system modifications
+USER sandbox
+
+CMD ["python", "/sandbox/code.py"]
