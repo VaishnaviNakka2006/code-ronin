@@ -16,71 +16,11 @@ router = APIRouter(
 
 
 @router.post("/{mission_id}/submit", response_model=SubmissionResponse)
-async def submit_mission(mission_id: int, req: SubmissionRequest, user=Depends(get_current_user)):
-    # 1. Fetch mission
-    mission_res = supabase.table("missions").select("*").eq("id", mission_id).execute()
-    if not mission_res.data:
-        raise HTTPException(404, "Mission not found")
-    mission = mission_res.data[0]
-
-    # 2. Run tests using MissionEngine
-    test_result = MissionEngine.run_tests(mission_id, req.code)
-
-    # 3. Record attempt
-    supabase.table("user_code_attempts").insert({
-        "user_id": str(user.id),
-        "mission_id": mission_id,
-        "code": req.code,
-        "output": test_result["output"],
-        "passed_tests": test_result["tests_passed"],
-        "total_tests": test_result["total_tests"]
-    }).execute()
-
-    # 4. XP calculation (same as before)
-    xp_gained = 0
-    completed = False
-    if test_result["success"]:
-        progress_res = supabase.table("user_progress").select("*").eq("user_id", user.id).eq("mission_id", mission_id).execute()
-        if not progress_res.data:
-            completed = True
-            xp_base = mission.get("xp_base", 10)
-            difficulty_mult = {"easy": 1, "medium": 1.5, "hard": 2, "boss": 3}
-            mult = difficulty_mult.get(mission.get("difficulty", "easy"), 1)
-            xp_gained = int(xp_base * mult)
-            supabase.table("user_progress").insert({
-                "user_id": user.id,
-                "mission_id": mission_id,
-                "xp_earned": xp_gained,
-                "best_score": test_result["score"]
-            }).execute()
-            # Update user total XP
-
-            print("AUTH USER ID:", user.id)
-
-            profile = supabase.table("profiles").select("xp").eq("id", user.id).execute()
-            new_xp = profile.data[0]["xp"] + xp_gained
-            supabase.table("profiles").update({"xp": new_xp}).eq("id", user.id).execute()
-
-    return SubmissionResponse(
-        success=test_result["success"],
-        score=test_result["score"],
-        xp_gained=xp_gained,
-        tests_passed=test_result["tests_passed"],
-        total_tests=test_result["total_tests"],
-        output=test_result["output"],
-        completed=completed,
-        message="Mission completed!" if test_result["success"] else "Some tests failed. Try again."
-    )
-    return {
-        "success": True,
-        "score": 1.0,
-        "xp_gained": 10,
-        "tests_passed": 1,
-        "total_tests": 1,
-        "output": "Submission route works",
-        "completed": True,
-        "message": "Mission completed!"
-    }
+async def submit_mission(
+    mission_id: int,
+    req: SubmissionRequest,
+    user=Depends(get_current_user)
+):
 
     # FETCH MISSION
     mission_res = (
@@ -153,7 +93,7 @@ async def submit_mission(mission_id: int, req: SubmissionRequest, user=Depends(g
                 .execute()
             )
 
-            # FIRST TIME COMPLETION
+            # FIRST TIME COMPLETION ONLY
             if not progress_res.data:
 
                 completed = True
@@ -204,6 +144,34 @@ async def submit_mission(mission_id: int, req: SubmissionRequest, user=Depends(g
                     test_result["score"]
 
                 }).execute()
+
+                # UPDATE USER XP
+                profile = (
+                    supabase
+                    .table("profiles")
+                    .select("xp")
+                    .eq("id", str(user.id))
+                    .execute()
+                )
+
+                current_xp = profile.data[0]["xp"]
+
+                supabase.table(
+                    "profiles"
+                ).update({
+
+                    "xp":
+                    current_xp + xp_gained
+
+                }).eq(
+                    "id",
+                    str(user.id)
+                ).execute()
+
+                print(
+                    "XP UPDATED:",
+                    current_xp + xp_gained
+                )
 
         except Exception as e:
 

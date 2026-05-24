@@ -8,6 +8,9 @@ from app.routers.user import router as user_router
 from app.routers.leaderboard import router as leaderboard_router
 from app.routers.missions import router as missions_router
 from app.routers.ai import router as ai_router
+from app.routers import achievements
+from fastapi.security import HTTPBearer
+from fastapi import Security
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
 
@@ -16,12 +19,14 @@ from app.websocket import manager
 load_dotenv()
 
 app = FastAPI(title="NEXUS Code Ronin API")
+security = HTTPBearer()
 
 
 app.include_router(user_router)
 app.include_router(leaderboard_router)
 app.include_router(missions_router)
 app.include_router(ai_router)
+app.include_router(achievements.router)
 
 
 # CORS

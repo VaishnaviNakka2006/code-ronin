@@ -1,13 +1,16 @@
-from fastapi import Header, HTTPException
-async def get_current_user(authorization: str = Header(None)):
+from fastapi import HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="Missing token"
-        )
+security = HTTPBearer()
 
-    # Fake local user
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+
+    token = credentials.credentials
+
+    print("TOKEN:", token)
+
     class User:
         id = "251b44c9-c31d-4ff0-836e-1407e86c411c"
 

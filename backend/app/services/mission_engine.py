@@ -108,7 +108,7 @@ class MissionEngine:
             ).strip()
 
             passed_flag = (
-                actual_output == expected
+                actual_output.strip() == expected.strip()
             )
 
             if passed_flag:

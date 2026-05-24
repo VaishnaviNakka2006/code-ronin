@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from app.deps import get_current_user
 from supabase import create_client
@@ -102,4 +103,97 @@ async def check_streak(user=Depends(get_current_user)):
 
     return {
         "streak": streak
+    }
+
+
+from fastapi import APIRouter, Depends
+from app.deps import get_current_user
+from app.main import supabase
+from datetime import date
+
+router = APIRouter(prefix="/user", tags=["user"])
+
+
+# existing routes here...
+
+@router.get("/streak")
+async def get_streak():
+    pass
+
+
+# PASTE NEW CODE BELOW THIS
+
+from datetime import date, timedelta
+from fastapi import APIRouter, Depends
+from app.deps import get_current_user
+from app.main import supabase
+
+router = APIRouter(prefix="/user", tags=["user"])
+
+
+@router.post("/check-streak")
+async def check_streak(user=Depends(get_current_user)):
+
+    user_id = user.id
+
+    print("USER ID:", user_id)
+
+    profile = (
+        supabase
+        .table("profiles")
+        .select("*")
+        .eq("id", user_id)
+        .execute()
+    )
+
+    print("PROFILE:", profile.data)
+
+    if not profile.data:
+        return {"error": "Profile not found"}
+
+    profile_data = profile.data[0]
+
+    current_streak = profile_data.get("streak_days", 0)
+
+    last_active = profile_data.get("last_active")
+
+    today = date.today()
+
+    # FIRST TIME
+    if not last_active:
+
+        new_streak = 1
+
+    else:
+
+        last_active_date = date.fromisoformat(last_active)
+
+        # SAME DAY → DO NOT INCREASE
+        if last_active_date == today:
+
+            return {
+                "success": True,
+                "message": "Already checked today",
+                "current_streak": current_streak
+            }
+
+        # NEXT DAY → INCREASE
+        elif last_active_date == today - timedelta(days=1):
+
+            new_streak = current_streak + 1
+
+        # MISSED DAYS → RESET
+        else:
+
+            new_streak = 1
+
+    # UPDATE DATABASE
+    supabase.table("profiles").update({
+        "streak_days": new_streak,
+        "last_active": str(today)
+    }).eq("id", user_id).execute()
+
+    return {
+        "success": True,
+        "new_streak": new_streak
     }
