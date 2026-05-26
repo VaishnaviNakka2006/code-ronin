@@ -71,6 +71,10 @@
 
         <RankBadge rank={$user.rank} />
 
+        <a
+          href="/achievements"
+          class="px-4 py-2 rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all font-mono">🏆 ACHIEVEMENTS</a>
+
         <div class="text-neon-cyan">
           🔥 Streak: {$user.streak} days
         </div>

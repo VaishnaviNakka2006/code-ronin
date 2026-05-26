@@ -37,9 +37,14 @@ async def add_xp(data: UpdateXP, user=Depends(get_current_user)):
     elif new_xp >= 30:
         rank = "Runner"
 
+    from datetime import date
+
+    today = date.today()
+
     supabase.table("profiles").update({
         "xp": new_xp,
-        "rank": rank
+        "rank": rank,
+        "last_active": today.isoformat()
     }).eq("id", user_id).execute()
 
     supabase.table("user_progress").insert({

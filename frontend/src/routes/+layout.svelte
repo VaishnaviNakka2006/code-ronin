@@ -2,16 +2,25 @@
   import '../app.css';
   import { onMount } from 'svelte';
 
-  import AnimatedBackground from '$lib/components/AnimatedBackground.svelte';
-  import Scanlines from '$lib/components/Scanlines.svelte';
+  import AnimatedBackground
+    from '$lib/components/AnimatedBackground.svelte';
 
-  import { sound } from '$lib/utils/soundManager';
+  import Scanlines
+    from '$lib/components/Scanlines.svelte';
+
+  import { sound }
+    from '$lib/utils/soundManager';
 
   import AchievementToast
-  from '$lib/components/AchievementToast.svelte';
+    from '$lib/components/AchievementToast.svelte';
 
-  onMount(() => {
+  
+
+  onMount(async () => {
+
     sound.init();
+
+
   });
 </script>
 
@@ -20,4 +29,7 @@
 <Scanlines />
 
 <AchievementToast />
+
+
+
 <slot />

@@ -89,30 +89,95 @@ class MissionEngine:
 
             try:
 
-                # EXECUTE USER CODE
-                local_vars = {}
+                actual_output = ""
 
-                exec(user_code, {}, local_vars)
+                # =========================
+                # MISSION 3 → FACTORIAL
+                # =========================
+                if mission_id == 3:
 
-                # FIND FUNCTION
-                func = local_vars.get("factorial")
+                    local_vars = {}
 
-                if not func:
+                    exec(user_code, local_vars, local_vars)
 
-                    actual_output = "Function factorial() not found"
+                    func = local_vars.get("factorial")
 
-                    passed_flag = False
+                    if not func:
 
+                        actual_output = "Function factorial() not found"
+
+                        passed_flag = False
+
+                    else:
+
+                        result = func(int(test_input))
+
+                        actual_output = str(result).strip()
+
+                        passed_flag = (
+                            actual_output == expected
+                        )
+
+                # =========================
+                # MISSIONS 1 & 2
+                # =========================
                 else:
 
-                # RUN FUNCTION USING TEST INPUT
-                    result = func(int(test_input))
+                    # Execute user code safely
+                    local_vars = {}
 
-                    actual_output = str(result).strip()
+                    exec(user_code, local_vars, local_vars)
 
-                    passed_flag = (
-                        actual_output == expected
-                    )
+                    # Mission 1 → add function
+                    if mission_id == 1:
+
+                        func = local_vars.get("add")
+
+                        if not func:
+
+                            actual_output = "Function add() not found"
+
+                            passed_flag = False
+
+                        else:
+
+                            inputs = test_input.split(",")
+
+                            result = func(
+                                int(inputs[0]),
+                                int(inputs[1])
+                            )
+
+                            actual_output = str(result).strip()
+
+                            passed_flag = (
+                                actual_output == expected
+                            )
+
+                    # Mission 2 → generic execution
+                    elif mission_id == 2:
+
+                        result = _runner.execute(
+                            code=user_code,
+                            stdin_input=test_input
+                        )
+
+                        actual_output = str(result).strip()
+
+                        passed_flag = (
+                            actual_output == expected
+                        )
+                    # Fallback missions
+                    else:
+
+                        actual_output = _runner.execute(
+                            code=user_code,
+                            stdin_input=test_input
+                        ).strip()
+
+                        passed_flag = (
+                            actual_output == expected
+                        )
 
             except Exception as e:
 

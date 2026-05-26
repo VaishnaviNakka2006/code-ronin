@@ -1,3 +1,6 @@
+
+
+
 <script lang="ts">
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
@@ -13,6 +16,16 @@
 
   import MissionCompleteScreen
     from '$lib/components/cinematic/MissionCompleteScreen.svelte';
+
+  import XPPopup from '$lib/components/XPPopup.svelte';
+
+  import{
+    showAchievementToast
+  } from '$lib/utils/achievementToast';
+
+  import{
+    addNewlyUnlocked
+  } from '$lib/stores/achievementStore'
 
   import { bossHealth }
     from '$lib/stores/gameStore';
@@ -59,6 +72,28 @@
   let rankUpAfter:
     { oldRank: string; newRank: string }
     | null = null;
+
+  let xpPopups:
+    { id: number; xp: number }[] = [];
+
+  let nextPopupId = 0;
+
+  function addXPPopup(xp: number) {
+
+    const id = nextPopupId++;
+
+    xpPopups = [
+      ...xpPopups,
+      { id, xp }
+    ];
+  }
+
+  function removeXPPopup(id: number) {
+
+    xpPopups = xpPopups.filter(
+      (p) => p.id !== id
+    );
+  }
 
   async function loadMission() {
 
@@ -119,10 +154,50 @@
       output = result.output;   // shows which tests passed/failed
 
       if (result.success) {
+
         const oldRank = $user.rank;
+
         updateXP($user.xp + result.xp_gained);
+
         const newRank = $user.rank;
+
         const rankChanged = oldRank !== newRank;
+
+        // STEP 6B START
+
+        if (result.xp_gained > 0) {
+
+          addXPPopup(result.xp_gained);
+        }
+
+        if (
+          result.new_achievements &&
+          result.new_achievements.length
+        ) {
+
+          addNewlyUnlocked(
+            result.new_achievements
+          );
+
+          for (
+            const ach of result.new_achievements
+          ) {
+
+            showAchievementToast(
+              ach.name,
+              ach.xp_reward
+            );
+
+            if (ach.xp_reward > 0) {
+
+              addXPPopup(
+                ach.xp_reward
+              );
+            }
+          }
+        }
+
+        // STEP 6B END
 
         if (bossVisible) {
           bossHealth.update(h => Math.max(0, h - 50));
@@ -318,7 +393,20 @@
 
 {/if}
 
+{#each xpPopups as popup}
+
+  <XPPopup
+    xp={popup.xp}
+    onComplete={( ) =>
+removeXPPopup(popup.id)}
+  />
+
+{/each}
+
 
 
 
 async function handleExecute()
+
+
+result.success
