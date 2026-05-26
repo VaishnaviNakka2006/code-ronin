@@ -127,6 +127,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends
 from app.deps import get_current_user
 from app.main import supabase
+from app.services.achievement_service import AchievementService
 
 router = APIRouter(prefix="/user", tags=["user"])
 
@@ -193,7 +194,17 @@ async def check_streak(user=Depends(get_current_user)):
         "last_active": str(today)
     }).eq("id", user_id).execute()
 
+    # CHECK STREAK ACHIEVEMENTS
+    unlocked = AchievementService.evaluate_and_unlock(
+        user.id,
+        "daily_streak",
+        {}
+    )
+
     return {
         "success": True,
-        "new_streak": new_streak
+        "new_streak": new_streak,
+        "new_achievements": unlocked
     }
+
+

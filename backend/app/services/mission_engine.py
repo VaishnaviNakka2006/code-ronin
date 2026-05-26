@@ -82,34 +82,43 @@ class MissionEngine:
                 tc["expected_output"]
             ).strip()
 
-            # Test input code from DB
             test_input = tc.get(
                 "input",
                 ""
             )
 
-            # Combine user solution + test execution
-            full_code = (
-                user_code
-                + "\n\n"
-                + (test_input or "")
-            )
+            try:
 
-            # Execute code
-            actual_output = (
-                _runner.execute(
-                    full_code,
-                    tc.get("input") or ""
-                )
-            )
+                # EXECUTE USER CODE
+                local_vars = {}
 
-            actual_output = str(
-                actual_output
-            ).strip()
+                exec(user_code, {}, local_vars)
 
-            passed_flag = (
-                actual_output.strip() == expected.strip()
-            )
+                # FIND FUNCTION
+                func = local_vars.get("factorial")
+
+                if not func:
+
+                    actual_output = "Function factorial() not found"
+
+                    passed_flag = False
+
+                else:
+
+                # RUN FUNCTION USING TEST INPUT
+                    result = func(int(test_input))
+
+                    actual_output = str(result).strip()
+
+                    passed_flag = (
+                        actual_output == expected
+                    )
+
+            except Exception as e:
+
+                actual_output = str(e)
+
+                passed_flag = False
 
             if passed_flag:
 

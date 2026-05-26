@@ -6,6 +6,7 @@ from app.schemas.submission import (
 from app.services.mission_engine import MissionEngine
 from app.deps import get_current_user
 from app.db import supabase
+from app.services.achievement_service import AchievementService
 
 import random
 
@@ -93,6 +94,8 @@ async def submit_mission(
                 .execute()
             )
 
+            print("PROGRESS DATA:", progress_res.data)
+
             # FIRST TIME COMPLETION ONLY
             if not progress_res.data:
 
@@ -172,6 +175,36 @@ async def submit_mission(
                     "XP UPDATED:",
                     current_xp + xp_gained
                 )
+
+
+                # ACHIEVEMENT EVALUATION
+                AchievementService.evaluate_and_unlock(
+                    user.id,
+                    "mission_complete",
+                    {"mission_id": mission_id}
+                )
+
+                # BOSS ACHIEVEMENT
+                if mission["is_boss"] == True:
+                    print("BOSS MISSION DETECTED")
+                    AchievementService.evaluate_and_unlock(user.id, "boss_defeated", {})
+
+                # PERFECT SCORE ACHIEVEMENT
+                if test_result["score"] >= 1.0:
+
+                    AchievementService.evaluate_and_unlock(
+                        user.id,
+                        "perfect_score",
+                        {}
+                    )
+
+                # XP MILESTONE ACHIEVEMENTS
+                AchievementService.evaluate_and_unlock(
+                    user.id,
+                    "xp_milestone",
+                    {}
+                )
+
 
         except Exception as e:
 
@@ -312,7 +345,6 @@ async def generate_mission(
 @router.get("/test")
 async def test_route():
     return {"message": "missions router works"}
-
 
 
 
