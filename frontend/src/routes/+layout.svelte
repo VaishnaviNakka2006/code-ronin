@@ -14,6 +14,8 @@
   import AchievementToast
     from '$lib/components/AchievementToast.svelte';
 
+  import NotificationBell from '$lib/components/NotificationBell.svelte';
+
   onMount(() => {
     sound.init();
   });
@@ -24,5 +26,9 @@
 <Scanlines />
 
 <AchievementToast />
+
+<div class="fixed top-6 right-6 z-50">
+  <NotificationBell />
+</div>
 
 <slot />

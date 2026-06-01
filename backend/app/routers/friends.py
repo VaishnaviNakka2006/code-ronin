@@ -42,6 +42,15 @@ async def send_friend_request(target_user_id: str, user=Depends(get_current_user
         .execute()
     )
 
+    request_id = result.data[0]["id"] if result.data else None
+
+    supabase.table("notifications").insert({
+        "user_id": target_user_id,
+        "type": "friend_request",
+        "content": f"{user.id} sent you a friend request",
+         "related_id": request_id
+    }).execute()
+
     print("INSERT RESULT:", result.data)
 
     return {"message": "Friend request sent"}
@@ -70,6 +79,13 @@ async def accept_friend_request(
         .update({"status": "accepted"}) \
         .eq("id", request_id) \
         .execute()
+    
+    supabase.table("notifications").insert({
+        "user_id": req["from_user_id"],
+        "type": "friend_accepted",
+        "content": f"{user.id} accepted your friend request",
+        "related_id": request_id
+    }).execute()
 
     return {
         "message": "Friend request accepted"
