@@ -14,13 +14,8 @@
   import AchievementToast
     from '$lib/components/AchievementToast.svelte';
 
-  
-
-  onMount(async () => {
-
+  onMount(() => {
     sound.init();
-
-
   });
 </script>
 
@@ -29,7 +24,5 @@
 <Scanlines />
 
 <AchievementToast />
-
-
 
 <slot />

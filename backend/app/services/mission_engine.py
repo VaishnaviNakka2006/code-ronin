@@ -4,26 +4,20 @@ from app.db import supabase
 from app.config import USE_DOCKER
 
 if USE_DOCKER:
-
     from app.services.execution.docker_runner import DockerRunner
-
     _runner = DockerRunner()
-
 else:
-
     from app.services.execution.subprocess_runner import SubprocessRunner
-
     _runner = SubprocessRunner()
+
 
 class MissionEngine:
 
     @staticmethod
     def _format_details(details: List[Dict]) -> str:
-
         lines = []
 
         for d in details:
-
             status = "✓" if d["passed"] else "✗"
 
             lines.append(
@@ -40,7 +34,6 @@ class MissionEngine:
         user_code: str
     ) -> Dict[str, Any]:
 
-        # Fetch test cases from Supabase
         res = (
             supabase
             .table("test_cases")
@@ -52,7 +45,6 @@ class MissionEngine:
         test_cases = res.data
 
         if not test_cases:
-
             return {
                 "success": False,
                 "score": 0,
@@ -89,11 +81,9 @@ class MissionEngine:
 
             try:
 
-                actual_output = ""
-
-                # =========================
-                # MISSION 3 → FACTORIAL
-                # =========================
+                # =====================
+                # MISSION 3 - FACTORIAL
+                # =====================
                 if mission_id == 3:
 
                     local_vars = {}
@@ -118,66 +108,21 @@ class MissionEngine:
                             actual_output == expected
                         )
 
-                # =========================
-                # MISSIONS 1 & 2
-                # =========================
+                # =====================
+                # OTHER MISSIONS
+                # =====================
                 else:
 
-                    # Execute user code safely
-                    local_vars = {}
+                    result = _runner.execute(
+                        code=user_code,
+                        stdin_input=test_input
+                    )
 
-                    exec(user_code, local_vars, local_vars)
+                    actual_output = str(result).strip()
 
-                    # Mission 1 → add function
-                    if mission_id == 1:
-
-                        func = local_vars.get("add")
-
-                        if not func:
-
-                            actual_output = "Function add() not found"
-
-                            passed_flag = False
-
-                        else:
-
-                            inputs = test_input.split(",")
-
-                            result = func(
-                                int(inputs[0]),
-                                int(inputs[1])
-                            )
-
-                            actual_output = str(result).strip()
-
-                            passed_flag = (
-                                actual_output == expected
-                            )
-
-                    # Mission 2 → generic execution
-                    elif mission_id == 2:
-
-                        result = _runner.execute(
-                            code=user_code,
-                            stdin_input=test_input
-                        )
-
-                        actual_output = str(result).strip()
-
-                        passed_flag = (
-                            actual_output == expected
-                        )
-                    # Fallback missions
-                    else:
-
-                        actual_output = _runner.execute(
-                            code=user_code,
-                            stdin_input=test_input
-                        ).strip()
-
-                        passed_flag = (
-                            actual_output == expected
-                        )
+                    passed_flag = (
+                        actual_output == expected
+                    )
 
             except Exception as e:
 

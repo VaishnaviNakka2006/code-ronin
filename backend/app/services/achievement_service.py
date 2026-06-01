@@ -151,7 +151,7 @@ class AchievementService:
         elif trigger == "perfect_score":
             required = config.get("required_count", 1)
             # Count missions where best_score = 1.0
-            res = supabase.table("user_progress").select("id", count="exact").eq("user_id", user_id).eq("best_score", 1.0).execute()
+            res = supabase.table("user_progress").select("mission_id", count="exact").eq("user_id", user_id).eq("best_score", 1.0).execute()
             return res.count >= required
         elif trigger == "xp_milestone":
             required_xp = config.get("required_xp", 0)

@@ -1,5 +1,19 @@
 <script lang="ts">
   import { signInWithGoogle, signInWithDiscord } from '$lib/stores/authStore';
+  import { onMount } from 'svelte';
+  import { supabase } from '$lib/supabaseClient';
+
+  onMount(async () => {
+
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    if (session) {
+      window.location.href = '/dashboard';
+    }
+
+  });
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-neon-dark">

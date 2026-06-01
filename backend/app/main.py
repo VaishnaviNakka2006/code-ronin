@@ -13,6 +13,8 @@ from fastapi.security import HTTPBearer
 from fastapi import Security
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
+from app.routers import friends
+from app.routers import profile
 
 from app.websocket import manager
 
@@ -27,6 +29,9 @@ app.include_router(leaderboard_router)
 app.include_router(missions_router)
 app.include_router(ai_router)
 app.include_router(achievements.router)
+app.include_router(friends.router)
+app.include_router(profile.router)
+
 
 
 # CORS

@@ -6,6 +6,7 @@ from app.db import supabase
 from app.services.achievement_service import AchievementService
 
 import random
+from datetime import date, timedelta
 
 router = APIRouter(prefix="/missions", tags=["missions"])
 
@@ -100,14 +101,53 @@ async def submit_mission(
 
                 new_xp = current_xp + xp_gained
 
+                # Determine rank
+                new_rank = "Scavenger"
+
+                if new_xp >= 100:
+                    new_rank = "Hacker"
+                elif new_xp >= 30:
+                    new_rank = "Runner"
+
                 print("CURRENT XP:", current_xp)
                 print("XP GAINED:", xp_gained)
                 print("NEW XP:", new_xp)
+                print("NEW RANK:", new_rank)
+
+                from datetime import date
+
+                today = date.today()
+
+                current_streak = profile.data[0].get("streak_days", 0)
+                last_active = profile.data[0].get("last_active")
+
+                if not last_active:
+
+                    new_streak = 1
+
+                else:
+
+                    last_date = date.fromisoformat(last_active)
+
+                    if last_date == today:
+
+                        new_streak = current_streak
+
+                    elif last_date == today - timedelta(days=1):
+
+                        new_streak = current_streak + 1
+
+                    else:
+
+                        new_streak = 1
 
                 update_res = (
                     supabase.table("profiles")
                     .update({
-                        "xp": new_xp
+                        "xp": new_xp,
+                        "rank": new_rank,
+                        "streak_days": new_streak,
+                        "last_active": today.isoformat()
                     })
                     .eq("id", str(user.id))
                     .execute()
@@ -155,6 +195,23 @@ async def submit_mission(
         ),
     )
 
+@router.get("/{mission_id}")
+async def get_mission(mission_id: int):
+
+    res = (
+        supabase.table("missions")
+        .select("*")
+        .eq("id", mission_id)
+        .execute()
+    )
+
+    if not res.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Mission not found"
+        )
+
+    return res.data[0]
 
 @router.get("/generate")
 async def generate_mission(difficulty: str = "easy"):

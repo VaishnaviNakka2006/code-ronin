@@ -99,24 +99,11 @@
 
     try {
 
-      let difficulty = 'easy';
-
-      if (missionId === 2)
-        difficulty = 'medium';
-
-      if (missionId === 3)
-        difficulty = 'hard';
-
       const res = await fetch(
-        `http://127.0.0.1:8000/missions/generate?difficulty=${difficulty}`
+        `http://127.0.0.1:8000/missions/${missionId}`
       );
 
       mission = await res.json();
-
-      // FORCE BOSS FLAG
-      if (missionId === 3) {
-        mission.isBoss = true;
-      }
 
     } catch (err) {
 
@@ -127,7 +114,9 @@
         description: 'Backend connection failed.',
         isBoss: false
       };
+
     }
+
   }
 
   onMount(async () => {

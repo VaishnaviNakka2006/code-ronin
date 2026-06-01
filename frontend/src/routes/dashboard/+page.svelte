@@ -1,6 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { requireAuth } from '$lib/guards/authGuard';
+  
+  import { goto } from '$app/navigation';
+  async function logout() {
+    await supabase.auth.signOut();
+    goto('/login');
+  }
+
+  import { supabase } from '$lib/supabaseClient';
 
   import { user } from '$lib/stores/userStore';
 
@@ -46,6 +54,8 @@
 
     await requireAuth();
 
+    console.log('USER STORE:', $user);
+
     xpValue = $user.xp;
   });
 
@@ -70,14 +80,35 @@
       <div class="flex gap-4">
 
         <RankBadge rank={$user.rank} />
+        
+        <div class="text-neon-cyan">
+          🔥 Streak: {$user.streak} days
+        </div>
 
         <a
           href="/achievements"
           class="px-4 py-2 rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all font-mono">🏆 ACHIEVEMENTS</a>
+        
+        <a
+          href="/leaderboard"
+          class="px-4 py-2 rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black transition-all font-mono"
+        >
+          🏆 LEADERBOARD
+        </a>
 
-        <div class="text-neon-cyan">
-          🔥 Streak: {$user.streak} days
-        </div>
+        <a
+          href="/friends"
+          class="px-4 py-2 rounded-lg border border-pink-400 text-pink-400 hover:bg-pink-400 hover:text-black transition-all font-mono"
+        >
+          👥 FRIENDS
+        </a>
+
+        <button
+          on:click={logout}
+          class="px-4 py-2 rounded-lg border border-red-400 text-red-400 hover:bg-red-400 hover:text-black transition-all font-mono"
+        >
+          🚪 LOGOUT
+        </button>
 
       </div>
     </div>
