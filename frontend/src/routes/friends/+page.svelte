@@ -17,6 +17,19 @@
 
   let searching = false;
 
+  function isOnline(lastActive: string) {
+
+    if (!lastActive) return false;
+
+    const last = new Date(lastActive).getTime();
+
+    const now = Date.now();
+
+    const diffMinutes = (now - last) / (1000 * 60);
+
+    return diffMinutes <= 5;
+  }
+
   async function loadRequests() {
 
     try {
@@ -360,6 +373,14 @@
                 <span class="text-cyan-300 font-mono">
                   #{index + 1}
                 </span>
+
+                <span
+                  class={`w-3 h-3 rounded-full ${
+                    isOnline(friend.last_active)
+                      ? 'bg-green-500'
+                      : 'bg-gray-500'
+                  }`}
+                ></span>
 
                 <span class="text-white">
                   {friend.username}

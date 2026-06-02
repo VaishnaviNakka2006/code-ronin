@@ -4,7 +4,7 @@ class LeaderboardService:
     @staticmethod
     def get_global_leaderboard(limit: int = 50):
         res = supabase.table("profiles") \
-            .select("id, username, xp, rank") \
+            .select("id, username, xp, rank, last_active") \
             .order("xp", desc=True) \
             .limit(limit) \
             .execute()
@@ -28,7 +28,7 @@ class LeaderboardService:
             return []
         # Fetch profiles of those friends
         res = supabase.table("profiles") \
-            .select("id, username, xp, rank") \
+            .select("id, username, xp, rank, last_active") \
             .in_("id", list(friend_ids)) \
             .order("xp", desc=True) \
             .limit(limit) \
