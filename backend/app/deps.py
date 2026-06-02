@@ -9,9 +9,12 @@ security = HTTPBearer()
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
+
     token = credentials.credentials
 
-    print("TOKEN:", token)
+    if token.startswith("Bearer "):
+        token = token.replace("Bearer ", "")
+
 
     try:
         auth_user = supabase.auth.get_user(token)

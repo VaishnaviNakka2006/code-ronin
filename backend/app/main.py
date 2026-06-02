@@ -16,6 +16,7 @@ from fastapi import WebSocketDisconnect
 from app.routers import friends
 from app.routers import profile
 from app.routers import notifications
+from app.routers import community
 
 from app.websocket import manager
 
@@ -33,6 +34,7 @@ app.include_router(achievements.router)
 app.include_router(friends.router)
 app.include_router(profile.router)
 app.include_router(notifications.router)
+app.include_router(community.router)
 
 
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.submission import SubmissionRequest, SubmissionResponse
 from app.services.mission_engine import MissionEngine
 from app.deps import get_current_user
+from app.services.ai_mission_generator import generate_mission as generate_ai_service_mission
 from app.db import supabase
 from app.services.achievement_service import AchievementService
 
@@ -267,5 +268,25 @@ async def generate_mission(difficulty: str = "easy"):
 @router.get("/test")
 async def test_route():
     return {"message": "missions router works"}
+
+@router.post("/generate-ai")
+async def generate_ai_mission(
+    difficulty: str = "easy",
+    topic: str = "general",
+    user=Depends(get_current_user)
+):
+    try:
+        mission = await generate_ai_service_mission(
+            difficulty,
+            topic
+        )
+
+        return mission
+
+    except Exception as e:
+        raise HTTPException(
+            500,
+            f"AI generation failed: {str(e)}"
+        )
 
 
