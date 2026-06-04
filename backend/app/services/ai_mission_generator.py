@@ -1,5 +1,7 @@
 import os
 import json
+import asyncio
+import time
 from groq import AsyncGroq
 from app.schemas.ai_mission import AIMission, TestCase
 
@@ -7,6 +9,21 @@ from app.schemas.ai_mission import AIMission, TestCase
 client = AsyncGroq(
     api_key=os.environ.get("GROQ_API_KEY"),
 )
+
+# Async-safe cache
+
+_cache = {}
+
+_cache_lock = asyncio.Lock()
+
+CACHE_TTL_SECONDS = 300
+
+
+def _make_cache_key(
+    difficulty: str,
+    topic: str
+) -> str:
+    return f"{difficulty}:{topic}"
 
 PROMPT_TEMPLATE = """
 You are generating Python coding missions.
@@ -48,8 +65,37 @@ JSON format:
 }}
 """
 
-async def generate_mission(difficulty: str = "easy", topic: str = "general") -> dict:
-    """Generate a mission using Groq's structured outputs for reliable JSON."""
+async def generate_mission(
+    difficulty: str = "easy",
+    topic: str = "general"
+) -> dict:
+
+    key = _make_cache_key(
+        difficulty,
+        topic
+    )
+
+    async with _cache_lock:
+
+        if key in _cache:
+
+            mission_data, timestamp = _cache[key]
+
+            if (
+                time.time() - timestamp
+                < CACHE_TTL_SECONDS
+            ):
+
+                print("CACHE HIT:", key)
+
+                return mission_data
+
+            else:
+
+                del _cache[key]
+
+    print("CACHE MISS:", key)
+
     try:
         # Use Groq with json_object response format
         completion = await client.chat.completions.create(
@@ -87,7 +133,17 @@ async def generate_mission(difficulty: str = "easy", topic: str = "general") -> 
             raise Exception("Function-based mission rejected")
             raise Exception("Function-based mission rejected")
         validated = AIMission(**mission_dict)
-        return validated.model_dump()
+
+        result = validated.model_dump()
+
+        async with _cache_lock:
+
+            _cache[key] = (
+                result,
+                time.time()
+            )
+
+        return result
     
     except Exception as e:
         # Fallback to static mission
