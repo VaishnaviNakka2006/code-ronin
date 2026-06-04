@@ -1,4 +1,6 @@
 from fastapi import FastAPI, HTTPException
+from app.rate_limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
 from fastapi.middleware.cors import CORSMiddleware
 from app.db import supabase
 from dotenv import load_dotenv
@@ -23,6 +25,12 @@ from app.websocket import manager
 load_dotenv()
 
 app = FastAPI(title="NEXUS Code Ronin API")
+app.state.limiter = limiter
+
+app.add_exception_handler(
+    429,
+    _rate_limit_exceeded_handler
+)
 security = HTTPBearer()
 
 

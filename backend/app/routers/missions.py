@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.rate_limiter import limiter
 from app.schemas.submission import SubmissionRequest, SubmissionResponse
 from app.services.mission_engine import MissionEngine
 from app.deps import get_current_user
@@ -344,7 +345,9 @@ async def test_route():
     return {"message": "missions router works"}
 
 @router.post("/generate-ai")
+@limiter.limit("10 per hour")
 async def generate_ai_mission(
+    request: Request,
     difficulty: str = "easy",
     topic: str = "general",
     user=Depends(get_current_user)
