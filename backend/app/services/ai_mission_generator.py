@@ -9,27 +9,43 @@ client = AsyncGroq(
 )
 
 PROMPT_TEMPLATE = """
-You are a coding challenge generator for a cyberpunk game. Generate a Python programming mission.
+You are generating Python coding missions.
 
 Difficulty: {difficulty}
 Topic: {topic}
 
-Output a JSON object with:
-- "title": string (cyberpunk style, max 60 chars)
-- "description": string (clear problem statement, include example input/output if needed)
-- "difficulty": string (easy, medium, hard)
-- "test_cases": list of objects, each with "input" (string, could be empty) and "expected_output" (string, exact output expected from print statements)
-- "code_stub": string (optional, initial code provided to user)
+Return ONLY valid JSON.
 
 Rules:
-- The user's code will be executed and its stdout compared to expected_output
-- Test inputs (if any) are passed via stdin – but for Python functions, the test case will append code to call the function
-- Keep each test case simple (one assertion)
-- Provide at least 2 test cases
-- Difficulty: easy -> basic syntax, medium -> loops/conditionals, hard -> functions/recursion
-- Make the mission solvable in 5-10 lines of code
 
-Return ONLY valid JSON.
+1. Generate ONLY stdin/stdout problems.
+2. User solutions will be executed as complete Python scripts.
+3. Inputs are provided through input().
+4. Outputs are validated using printed stdout.
+5. NEVER generate functions like:
+   def solve(...)
+   def factorial(...)
+6. NEVER ask the user to return values.
+7. Every test case MUST match the mission description exactly.
+8. At least 2 test cases.
+9. Easy = print/input/basic if.
+10. Medium = loops/conditions.
+11. Hard = functions/recursion.
+
+JSON format:
+
+{{
+  "title": "...",
+  "description": "...",
+  "difficulty": "...",
+  "test_cases": [
+    {{
+      "input": "...",
+      "expected_output": "..."
+    }}
+  ],
+  "code_stub": "..."
+}}
 """
 
 async def generate_mission(difficulty: str = "easy", topic: str = "general") -> dict:
@@ -49,28 +65,52 @@ async def generate_mission(difficulty: str = "easy", topic: str = "general") -> 
                 }
             ],
             response_format={"type": "json_object"},
-            temperature=0.7,
+            temperature=0.2,
             timeout=15.0
         )
         
         content = completion.choices[0].message.content
         mission_dict = json.loads(content)
+        for tc in mission_dict["test_cases"]:
+            tc["expected_output"] = tc["expected_output"].strip()
+
+        code_stub = mission_dict.get("code_stub", "")
+
+        banned_patterns = [
+            "def solve",
+            "def factorial",
+            "def echo",
+            "return "
+        ]
+
+        if any(p in code_stub for p in banned_patterns):
+            raise Exception("Function-based mission rejected")
+            raise Exception("Function-based mission rejected")
         validated = AIMission(**mission_dict)
         return validated.model_dump()
     
     except Exception as e:
         # Fallback to static mission
+        print("GROQ ERROR:", e)
         return _fallback_mission(difficulty)
 
 def _fallback_mission(difficulty: str) -> dict:
-    """Static fallback mission when API call fails."""
     return {
-        "title": "Legacy: Echo Chamber",
-        "description": "Write a function `echo(text)` that returns the input text unchanged.",
+        "title": "Legacy: Neon Greeting",
+        "description": "Read a name and print Hello, <name>!",
         "difficulty": difficulty,
         "test_cases": [
-            {"input": "echo('hello')", "expected_output": "hello"},
-            {"input": "echo('cyber')", "expected_output": "cyber"}
+            {
+                "input": "Neo",
+                "expected_output": "Hello, Neo!"
+            },
+            {
+                "input": "Trinity",
+                "expected_output": "Hello, Trinity!"
+            }
         ],
-        "code_stub": "def echo(text):\n    # Your code here\n    pass"
+        "code_stub": (
+            "name = input()\n"
+            "# Your code here\n"
+        )
     }

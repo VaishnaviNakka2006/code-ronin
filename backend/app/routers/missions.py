@@ -5,11 +5,85 @@ from app.deps import get_current_user
 from app.services.ai_mission_generator import generate_mission as generate_ai_service_mission
 from app.db import supabase
 from app.services.achievement_service import AchievementService
+from app.schemas.ai_submission import (
+    AIMissionSubmissionRequest,
+    AIMissionSubmissionResponse
+)
 
 import random
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/missions", tags=["missions"])
+
+@router.post("/ai/submit", response_model=AIMissionSubmissionResponse)
+async def submit_ai_mission(
+    submission: AIMissionSubmissionRequest,
+    user=Depends(get_current_user)
+):
+    mission = submission.mission
+    test_cases = mission.get("test_cases", [])
+    difficulty = mission.get("difficulty", "easy")
+
+    test_result = MissionEngine.run_tests_from_list(
+        test_cases,
+        submission.code
+    )
+
+    xp_map = {
+        "easy": 10,
+        "medium": 20,
+        "hard": 30
+    }
+
+    xp_reward = (
+        xp_map.get(difficulty, 10)
+        if test_result["success"]
+        else 0
+    )
+
+    if test_result["success"] and xp_reward > 0:
+
+        profile = (
+            supabase.table("profiles")
+            .select("*")
+            .eq("id", str(user.id))
+            .execute()
+        )
+
+        current_xp = profile.data[0].get("xp", 0)
+
+        supabase.table("profiles").update(
+            {
+                "xp": current_xp + xp_reward
+            }
+        ).eq(
+            "id",
+            str(user.id)
+        ).execute()
+
+    supabase.table("user_code_attempts").insert(
+        {
+            "user_id": str(user.id),
+            "mission_id": None,
+            "code": submission.code,
+            "output": test_result["output"],
+            "passed_tests": test_result["tests_passed"],
+            "total_tests": test_result["total_tests"]
+        }
+    ).execute()
+
+    return AIMissionSubmissionResponse(
+        success=test_result["success"],
+        xp_gained=xp_reward,
+        tests_passed=test_result["tests_passed"],
+        total_tests=test_result["total_tests"],
+        output=test_result["output"],
+        message=(
+            "Mission completed!"
+            if test_result["success"]
+            else "Some tests failed. Try again."
+        )
+    )
 
 
 @router.post("/{mission_id}/submit", response_model=SubmissionResponse)
@@ -288,5 +362,4 @@ async def generate_ai_mission(
             500,
             f"AI generation failed: {str(e)}"
         )
-
 

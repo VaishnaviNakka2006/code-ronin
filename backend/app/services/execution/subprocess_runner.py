@@ -25,6 +25,7 @@ class SubprocessRunner:
 
         try:
 
+            print("RUNNER STDIN:", repr(stdin_input))
             process = subprocess.run(
                 [sys.executable, fname],
                 input=stdin_input,

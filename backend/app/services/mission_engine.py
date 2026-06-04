@@ -10,6 +10,9 @@ else:
     from app.services.execution.subprocess_runner import SubprocessRunner
     _runner = SubprocessRunner()
 
+print("USE_DOCKER =", USE_DOCKER)
+print("RUNNER TYPE:", type(_runner).__name__)
+
 
 class MissionEngine:
 
@@ -112,6 +115,8 @@ class MissionEngine:
                 # OTHER MISSIONS
                 # =====================
                 else:
+                    print("TEST CASE:", tc)
+                    print("TEST INPUT:", repr(test_input))
 
                     result = _runner.execute(
                         code=user_code,
@@ -138,6 +143,121 @@ class MissionEngine:
                     "weight",
                     1.0
                 )
+
+            details.append({
+
+                "test_id": test_id,
+
+                "passed": passed_flag,
+
+                "expected": expected,
+
+                "actual": actual_output,
+
+                "description": tc.get(
+                    "description",
+                    ""
+                )
+            })
+
+        score = (
+            earned_weight / total_weight
+            if total_weight > 0
+            else 0
+        )
+
+        all_passed = (
+            score >= 1.0
+        )
+
+        return {
+
+            "success": all_passed,
+
+            "score": score,
+
+            "tests_passed": passed,
+
+            "total_tests": total,
+
+            "output": MissionEngine._format_details(
+                details
+            ),
+
+            "details": details
+        }
+    
+
+    @staticmethod
+    def run_tests_from_list(
+        test_cases: list,
+        user_code: str
+    ) -> dict:
+
+        total = len(test_cases)
+
+        passed = 0
+
+        total_weight = 0.0
+
+        earned_weight = 0.0
+
+        details = []
+
+        for tc in test_cases:
+
+            test_id = tc.get(
+                "id",
+                len(details) + 1
+            )
+
+            expected = str(
+                tc.get(
+                    "expected_output",
+                    ""
+                )
+            ).strip()
+
+            test_input = tc.get(
+                "input",
+                ""
+            )
+
+            weight = tc.get(
+                "weight",
+                1.0
+            )
+
+            total_weight += weight
+
+            try:
+                print("TEST CASE:", tc)
+                print("TEST INPUT:", repr(test_input))
+
+                result = _runner.execute(
+                    code=user_code,
+                    stdin_input=test_input
+                )
+
+                actual_output = str(
+                    result
+                ).strip()
+
+                passed_flag = (
+                    actual_output == expected
+                )
+
+            except Exception as e:
+
+                actual_output = str(e)
+
+                passed_flag = False
+
+            if passed_flag:
+
+                passed += 1
+
+                earned_weight += weight
 
             details.append({
 
