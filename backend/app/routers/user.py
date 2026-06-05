@@ -221,3 +221,32 @@ async def get_proficiency(
         user.id
     )
     return prof
+
+
+@router.get("/recommendations")
+async def get_recommendations(
+    limit: int = 3,
+    user=Depends(get_current_user)
+):
+    print("USER: ", user.id)
+    proficiency = await ProficiencyService.get_user_proficiency(user.id)
+
+    if not proficiency:
+        return {"recommendations": []}
+
+    sorted_topics = sorted(
+        proficiency.items(),
+        key=lambda x: x[1]
+    )
+
+    recommendations = [
+        {
+            "topic": topic,
+            "proficiency": score
+        }
+        for topic, score in sorted_topics[:limit]
+    ]
+
+    return {
+        "recommendations": recommendations
+    }

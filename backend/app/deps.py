@@ -17,6 +17,10 @@ async def get_current_user(
 
 
     try:
+        token = credentials.credentials
+
+        print("TOKEN RECEIVED:", token)
+        print("DOT COUNT:", token.count("."))
         auth_user = supabase.auth.get_user(token)
 
         if not auth_user.user:
