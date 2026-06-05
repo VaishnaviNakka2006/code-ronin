@@ -5,6 +5,7 @@
   import AnimatedMentor from '$lib/components/AnimatedMentor.svelte';
   import { user, updateXP } from '$lib/stores/userStore';
   import { toast } from 'svelte-sonner';
+  import { supabase } from '$lib/supabaseClient';
 
   let difficulty = 'easy';
   let topic = '';
@@ -14,6 +15,11 @@
   let resultOutput = '';
   let mentorMsg = 'Generate an AI mission to start.';
   let adaptive = false;
+
+  let recommendations: {
+    topic: string;
+    proficiency: number;
+  }[] = [];
 
   async function generate() {
     loading = true;
@@ -59,11 +65,76 @@
       loading = false;
     }
   }
+
+  async function loadRecommendations() {
+    try {
+      const session = await supabase.auth.getSession();
+      const API_BASE =
+        import.meta.env.VITE_API_URL ||
+        'http://localhost:8000';
+      const token =
+        session.data.session?.access_token;
+
+      const res = await fetch(
+        `${API_BASE}/user/recommendations`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(
+          'Failed to load recommendations'
+        );
+      }
+
+      const data = await res.json();
+
+      recommendations =
+        data.recommendations || [];
+    } catch (err) {
+      console.error(
+        'Failed to load recommendations',
+        err
+      );
+    }
+  }
+
+  function useRecommendation(topicName: string) {
+    topic = topicName;
+    adaptive = true;
+    generate();
+  }
+
+  onMount(async () => {
+    await loadRecommendations();
+  });
 </script>
 
 <div class="min-h-screen bg-neon-dark p-8">
   <div class="max-w-6xl mx-auto">
     <h1 class="text-4xl font-mono glow-text mb-6">⚡ INFINITE DOJO ⚡</h1>
+    {#if recommendations.length > 0}
+      <div class="mb-6 p-4 bg-black/40 rounded-lg border border-neon-cyan">
+        <h3 class="text-neon-cyan font-mono mb-2">
+          📈 RECOMMENDED FOR YOU
+        </h3>
+
+        <div class="flex flex-wrap gap-2">
+          {#each recommendations as rec}
+            <button
+              on:click={() => useRecommendation(rec.topic)}
+              class="px-3 py-1 bg-black/60 border border-neon-magenta rounded-full text-sm hover:bg-neon-magenta/20"
+            >
+              {rec.topic}
+              ({Math.round(rec.proficiency * 100)}%)
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- Mission generation controls -->
     <div class="flex gap-4 items-end mb-8">
