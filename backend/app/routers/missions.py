@@ -10,6 +10,7 @@ from app.schemas.ai_submission import (
     AIMissionSubmissionRequest,
     AIMissionSubmissionResponse
 )
+from app.services.proficiency_service import ProficiencyService
 
 import random
 from datetime import date, timedelta
@@ -350,8 +351,29 @@ async def generate_ai_mission(
     request: Request,
     difficulty: str = "easy",
     topic: str = "general",
+    adaptive: bool = False,
     user=Depends(get_current_user)
 ):
+    if adaptive:
+        proficiency = await ProficiencyService.get_user_proficiency(user.id)
+
+        if proficiency:
+            weakest_topic = min(
+                proficiency.items(),
+                key=lambda x: x[1]
+            )
+
+            topic = weakest_topic[0]
+            score = weakest_topic[1]
+
+            if score < 0.5:
+                difficulty = "easy"
+
+            elif score < 0.8:
+                difficulty = "medium"
+
+            else:
+                difficulty = "hard"
     try:
         mission = await generate_ai_service_mission(
             difficulty,
