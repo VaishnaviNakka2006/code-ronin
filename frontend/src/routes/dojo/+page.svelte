@@ -13,11 +13,16 @@
   let userCode = '';
   let resultOutput = '';
   let mentorMsg = 'Generate an AI mission to start.';
+  let adaptive = false;
 
   async function generate() {
     loading = true;
     try {
-      mission = await generateAIMission(difficulty, topic);
+      mission = await generateAIMission({
+        difficulty,
+        topic,
+        adaptive
+      });
       userCode = mission.code_stub || '';
       mentorMsg = `New mission: ${mission.title}. Write your code and submit.`;
       resultOutput = '';
@@ -64,7 +69,9 @@
     <div class="flex gap-4 items-end mb-8">
       <div>
         <label class="block text-sm text-neon-cyan">Difficulty</label>
-        <select bind:value={difficulty} class="bg-black/60 border border-neon-cyan rounded p-2">
+        <select
+          bind:value={difficulty}
+          disabled={adaptive} class="bg-black/60 border border-neon-cyan rounded p-2">
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
@@ -72,8 +79,27 @@
       </div>
       <div class="flex-1">
         <label class="block text-sm text-neon-cyan">Topic (optional)</label>
-        <input bind:value={topic} placeholder="e.g., loops, recursion, lists" class="w-full bg-black/60 border border-neon-cyan rounded p-2" />
+        <input
+          bind:value={topic}
+          disabled={adaptive} placeholder="e.g., loops, recursion, lists" class="w-full bg-black/60 border border-neon-cyan rounded p-2" />
       </div>
+
+      <div>
+        <label class="flex items-center gap-2 text-sm text-neon-cyan">
+          <input
+            type="checkbox"
+            bind:checked={adaptive}
+          />
+          🧠 Adaptive Mode
+        </label>
+      </div>
+
+      {#if adaptive}
+        <p class="text-xs text-gray-400 mt-1">
+          Adaptive mode automatically chooses topic and difficulty based on your weakest skill.
+        </p>
+      {/if}
+
       <button on:click={generate} disabled={loading} class="px-4 py-2 bg-neon-cyan text-black font-bold rounded hover:shadow-[0_0_20px_#00f3ff]">
         {loading ? 'GENERATING...' : '🎲 GENERATE MISSION'}
       </button>

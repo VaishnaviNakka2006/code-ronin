@@ -2,15 +2,59 @@ import { supabase } from '$lib/supabaseClient';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-export async function generateAIMission(difficulty: string, topic?: string) {
-  const session = await supabase.auth.getSession();
-  const token = session.data.session?.access_token;
-  const url = `${API_BASE}/missions/generate-ai?difficulty=${difficulty}${topic ? `&topic=${topic}` : ''}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!res.ok) throw new Error('Failed to generate mission');
+export async function generateAIMission(
+  params: {
+    difficulty: string;
+    topic?: string;
+    adaptive?: boolean;
+  }
+) {
+
+  const session =
+    await supabase.auth.getSession();
+
+  const token =
+    session.data.session?.access_token;
+
+  const url = new URL(
+    `${API_BASE}/missions/generate-ai`
+  );
+
+  url.searchParams.set(
+    'difficulty',
+    params.difficulty
+  );
+
+  if (params.topic) {
+    url.searchParams.set(
+      'topic',
+      params.topic
+    );
+  }
+
+  if (params.adaptive) {
+    url.searchParams.set(
+      'adaptive',
+      'true'
+    );
+  }
+
+  const res = await fetch(
+    url.toString(),
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(
+      'Failed to generate mission'
+    );
+  }
+
   return res.json();
 }
 

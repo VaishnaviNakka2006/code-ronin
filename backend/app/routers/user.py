@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from app.deps import get_current_user
+from app.services.proficiency_service import ProficiencyService
 from supabase import create_client
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -212,4 +213,11 @@ async def check_streak(user=Depends(get_current_user)):
         "new_achievements": unlocked
     }
 
-
+@router.get("/proficiency")
+async def get_proficiency(
+    user=Depends(get_current_user)
+):
+    prof = await ProficiencyService.get_user_proficiency(
+        user.id
+    )
+    return prof
