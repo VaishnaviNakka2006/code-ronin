@@ -1,6 +1,6 @@
 import { supabase } from '$lib/supabaseClient';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://code-ronin.onrender.com';
 
 export async function generateAIMission(
   params: {
