@@ -15,7 +15,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        'http://127.0.0.1:8000/notifications/unread-count',
+        `${import.meta.env.VITE_API_URL}/notifications/unread-count`,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -42,7 +42,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        'http://127.0.0.1:8000/notifications/',
+        `${import.meta.env.VITE_API_URL}/notifications/`,
         {
           headers: {
             Authorization: `Bearer ${token}`

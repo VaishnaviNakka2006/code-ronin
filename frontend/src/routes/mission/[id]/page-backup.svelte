@@ -80,7 +80,7 @@
         difficulty = 'hard';
 
       const res = await fetch(
-        `http://127.0.0.1:8000/missions/generate?difficulty=${difficulty}`
+        `${import.meta.env.VITE_API_URL}/missions/generate?difficulty=${difficulty}`
       );
 
       mission = await res.json();

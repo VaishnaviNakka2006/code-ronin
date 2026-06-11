@@ -6,7 +6,7 @@ export async function getAIHint(
   try {
 
     const res = await fetch(
-      'http://127.0.0.1:8000/ai/hint',
+      `${import.meta.env.VITE_API_URL}/ai/hint`,
       {
         method: 'POST',
 

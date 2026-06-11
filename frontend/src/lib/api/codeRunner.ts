@@ -7,7 +7,7 @@ export async function submitMission(code: string, missionId: number) {
   console.log("TOKEN:", token);
 
   const res = await fetch(
-    `http://127.0.0.1:8000/missions/${missionId}/submit`,
+    `${import.meta.env.VITE_API_URL}/missions/${missionId}/submit`,
     {
       method: 'POST',
       headers: {

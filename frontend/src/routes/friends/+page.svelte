@@ -41,7 +41,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        'http://127.0.0.1:8000/friends/requests',
+        '${import.meta.env.VITE_API_URL}/friends/requests',
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -77,7 +77,7 @@
         const token = session?.access_token;
 
         const res = await fetch(
-          `http://127.0.0.1:8000/friends/search?q=${encodeURIComponent(searchQuery)}`,
+          `${import.meta.env.VITE_API_URL}/friends/search?q=${encodeURIComponent(searchQuery)}`,
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -108,7 +108,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        'http://127.0.0.1:8000/leaderboard/friends',
+        '${import.meta.env.VITE_API_URL}/leaderboard/friends',
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -135,7 +135,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        `http://127.0.0.1:8000/friends/request/${targetUserId}`,
+        `${import.meta.env.VITE_API_URL}/friends/request/${targetUserId}`,
         {
           method: 'POST',
           headers: {
@@ -167,7 +167,7 @@
       const token = session?.access_token;
 
       await fetch(
-        `http://127.0.0.1:8000/friends/accept/${id}`,
+        `${import.meta.env.VITE_API_URL}/friends/accept/${id}`,
         {
           method: 'POST',
           headers: {
