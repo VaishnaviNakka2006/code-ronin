@@ -6,6 +6,8 @@
   let notifications: any[] = [];
   let showDropdown = false;
 
+  console.log("API URL =", import.meta.env.VITE_API_URL);
+
   async function loadUnreadCount() {
     try {
       const {

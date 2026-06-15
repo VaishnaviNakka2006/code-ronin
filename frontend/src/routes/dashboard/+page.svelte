@@ -16,7 +16,7 @@
 
 
       const res = await fetch(
-        "${import.meta.env.VITE_API_URL}/missions/generate-ai",
+        `${import.meta.env.VITE_API_URL}/missions/generate-ai`,
         {
           method: "POST",
           headers: {
@@ -101,7 +101,7 @@
     try {
 
       const res = await fetch(
-        '${import.meta.env.VITE_API_URL}/community/goal'
+        `${import.meta.env.VITE_API_URL}/community/goal`
       );
 
       communityGoal = await res.json();
