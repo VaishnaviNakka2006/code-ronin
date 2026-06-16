@@ -116,6 +116,9 @@ async def generate_mission(
         )
         
         content = completion.choices[0].message.content
+
+        print("GROQ RESPONSE:", content)
+
         mission_dict = json.loads(content)
         for tc in mission_dict["test_cases"]:
             tc["expected_output"] = tc["expected_output"].strip()
