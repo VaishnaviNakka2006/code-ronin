@@ -346,7 +346,7 @@ async def test_route():
     return {"message": "missions router works"}
 
 @router.post("/generate-ai")
-@limiter.limit("10 per hour")
+@limiter.limit("1000 per hour")
 async def generate_ai_mission(
     request: Request,
     difficulty: str = "easy",
