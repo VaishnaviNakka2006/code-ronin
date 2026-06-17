@@ -16,7 +16,7 @@
 
 
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/missions/generate-ai`,
+        `${import.meta.env.VITE_API_URL}/missions/generate-ai?difficulty=hard&topic=recursion`,
         {
           method: "POST",
           headers: {
