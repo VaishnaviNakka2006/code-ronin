@@ -99,6 +99,7 @@ async def generate_mission(
     try:
         # Use Groq with json_object response format
         completion = await client.chat.completions.create(
+            
             model="llama-3.3-70b-versatile",  # Supports json_object mode
             messages=[
                 {
@@ -114,7 +115,7 @@ async def generate_mission(
             temperature=0.2,
             timeout=15.0
         )
-        
+        print("GROQ REQUEST SENT")
         content = completion.choices[0].message.content
 
         print("GROQ RESPONSE:", content)
