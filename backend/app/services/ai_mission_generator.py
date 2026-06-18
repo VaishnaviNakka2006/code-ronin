@@ -47,7 +47,14 @@ Rules:
 8. At least 2 test cases.
 9. Easy = print/input/basic if.
 10. Medium = loops/conditions.
-11. Hard = functions/recursion.
+11. Hard = recursion using stdin/stdout only.
+12. DO NOT generate classes.
+13. DO NOT generate custom data structures.
+14. DO NOT generate trees, linked lists, graphs.
+15. User solution must be less than 30 lines.
+16. Input must come from input().
+17. Output must come from print().
+18. No helper functions except one recursive function.
 
 JSON format:
 
@@ -127,11 +134,15 @@ async def generate_mission(
         code_stub = mission_dict.get("code_stub", "")
 
         banned_patterns = [
-            "def solve",
-            "def factorial",
-            "def echo",
-            "return "
+            "class ",
+            "Node(",
+            "Tree",
+            "LinkedList",
+            "Graph",
         ]
+
+        if code_stub.count("def ") > 1:
+            raise Exception("Too many functions")
 
         if any(p in code_stub for p in banned_patterns):
             raise Exception("Function-based mission rejected")
