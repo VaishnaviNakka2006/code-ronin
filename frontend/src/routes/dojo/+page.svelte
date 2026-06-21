@@ -15,6 +15,9 @@
   let resultOutput = '';
   let mentorMsg = 'Generate an AI mission to start.';
   let adaptive = false;
+  $: if (mission?.code_stub) {
+    userCode = mission.code_stub;
+  }
 
   let recommendations: {
     topic: string;
