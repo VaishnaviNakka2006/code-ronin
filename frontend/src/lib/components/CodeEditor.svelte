@@ -11,9 +11,10 @@
 
   onMount(async () => {
     const monaco = await loader.init();
+
     editor = monaco.editor.create(editorContainer, {
       value: code,
-      language: language,
+      language,
       theme: 'vs-dark',
       fontSize: 14,
       fontFamily: 'Fira Code, monospace',
@@ -22,12 +23,22 @@
       lineNumbers: 'on',
       glyphMargin: false,
       folding: false,
-      scrollBeyondLastLine: false,
+      scrollBeyondLastLine: false
     });
+
     editor.onDidChangeModelContent(() => {
       code = editor.getValue();
     });
   });
+
+  // IMPORTANT FIX
+  $: if (
+    editor &&
+    code !== undefined &&
+    editor.getValue() !== code
+  ) {
+    editor.setValue(code);
+  }
 
   function runCode() {
     onExecute();
@@ -35,7 +46,11 @@
 </script>
 
 <div class="relative w-full h-full">
-  <div bind:this={editorContainer} class="w-full h-[400px] border border-neon-cyan rounded"></div>
+  <div
+    bind:this={editorContainer}
+    class="w-full h-[400px] border border-neon-cyan rounded"
+  ></div>
+
   <button
     on:click={runCode}
     class="mt-4 px-6 py-2 bg-neon-cyan text-black font-bold rounded-md hover:shadow-[0_0_20px_#00f3ff] transition-all"
