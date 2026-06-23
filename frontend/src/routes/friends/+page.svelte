@@ -41,7 +41,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        '${import.meta.env.VITE_API_URL}/friends/requests',
+        `${import.meta.env.VITE_API_URL}/friends/requests`,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -108,7 +108,7 @@
       const token = session?.access_token;
 
       const res = await fetch(
-        '${import.meta.env.VITE_API_URL}/leaderboard/friends',
+        `${import.meta.env.VITE_API_URL}/leaderboard/friends`,
         {
           headers: {
             Authorization: `Bearer ${token}`
