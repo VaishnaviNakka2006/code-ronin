@@ -124,3 +124,10 @@ async def websocket_endpoint(
         manager.disconnect(
             websocket
         )
+
+
+@app.get("/debug")
+async def debug():
+    return {
+        "status": "debug works"
+    }
