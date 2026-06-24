@@ -70,19 +70,8 @@
 
     try {
 
-        const {
-          data: { session }
-        } = await supabase.auth.getSession();
-
-        const token = session?.access_token;
-
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/friends/search?q=${encodeURIComponent(searchQuery)}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
+          `${import.meta.env.VITE_API_URL}/friends/search?q=${encodeURIComponent(searchQuery)}`
         );
 
         searchResults = await res.json();
