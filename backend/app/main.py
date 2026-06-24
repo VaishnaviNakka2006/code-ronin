@@ -25,6 +25,16 @@ from app.websocket import manager
 load_dotenv()
 
 app = FastAPI(title="NEXUS Code Ronin API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173",
+                   "https://code-ronin-frontend.onrender.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.state.limiter = limiter
 
 app.add_exception_handler(
@@ -47,15 +57,6 @@ app.include_router(community.router)
 
 
 # CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-                   "https://code-ronin-frontend.onrender.com"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Supabase
 # Root
