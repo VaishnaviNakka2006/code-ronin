@@ -3,12 +3,18 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.db import supabase
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header missing"
+        )
 
     token = credentials.credentials
 
@@ -17,7 +23,7 @@ async def get_current_user(
 
 
     try:
-        token = credentials.credentials
+        
 
         print("TOKEN RECEIVED:", token)
         print("DOT COUNT:", token.count("."))
