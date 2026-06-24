@@ -1,4 +1,4 @@
-from app.main import supabase
+from app.db import supabase
 from fastapi import APIRouter, Depends
 from app.services.achievement_service import AchievementService
 from app.deps import get_current_user

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.deps import get_current_user
-from app.main import supabase
+from app.db import supabase
 
 router = APIRouter(prefix="/friends", tags=["friends"])
 

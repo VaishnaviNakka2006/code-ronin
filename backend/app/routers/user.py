@@ -114,7 +114,7 @@ async def check_streak(user=Depends(get_current_user)):
 
 from fastapi import APIRouter, Depends
 from app.deps import get_current_user
-from app.main import supabase
+from app.db import supabase
 from datetime import date
 
 router = APIRouter(prefix="/user", tags=["user"])
@@ -132,7 +132,7 @@ async def get_streak():
 from datetime import date, timedelta
 from fastapi import APIRouter, Depends
 from app.deps import get_current_user
-from app.main import supabase
+from app.db import supabase
 from app.services.achievement_service import AchievementService
 
 router = APIRouter(prefix="/user", tags=["user"])

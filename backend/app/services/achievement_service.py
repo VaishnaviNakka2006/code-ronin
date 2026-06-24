@@ -1,4 +1,4 @@
-from app.main import supabase
+from app.db import supabase
 from typing import Dict, Any, List, Optional
 from datetime import date, timedelta
 

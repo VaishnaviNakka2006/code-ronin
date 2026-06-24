@@ -1,4 +1,4 @@
-from app.main import supabase
+from app.db import supabase
 from collections import defaultdict
 
 class ProficiencyService:

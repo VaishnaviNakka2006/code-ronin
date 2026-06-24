@@ -1,4 +1,4 @@
-from app.main import supabase
+from app.db import supabase
 
 class LeaderboardService:
     @staticmethod
