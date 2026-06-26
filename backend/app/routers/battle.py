@@ -1,8 +1,7 @@
 import asyncio
 import json
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
-from app.deps import get_current_user
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from app.db import supabase
 import logging
 
