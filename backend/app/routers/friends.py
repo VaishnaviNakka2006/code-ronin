@@ -44,12 +44,12 @@ async def send_friend_request(target_user_id: str, user=Depends(get_current_user
 
     request_id = result.data[0]["id"] if result.data else None
 
-    supabase.table("notifications").insert({
-        "user_id": target_user_id,
-        "type": "friend_request",
-        "content": f"{user.id} sent you a friend request",
-         "related_id": request_id
-    }).execute()
+    #supabase.table("notifications").insert({
+    #    "user_id": target_user_id,
+    #    "type": "friend_request",
+    #    "content": f"{user.id} sent you a friend request",
+    #     "related_id": request_id
+    #}).execute()
 
     print("INSERT RESULT:", result.data)
 
