@@ -9,7 +9,6 @@ security = HTTPBearer(auto_error=False)
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-
     if credentials is None:
         raise HTTPException(
             status_code=401,
@@ -18,21 +17,22 @@ async def get_current_user(
 
     token = credentials.credentials
 
-    if token.startswith("Bearer "):
-        token = token.replace("Bearer ", "")
-
-
     try:
-        
-
         print("TOKEN RECEIVED:", token)
         print("DOT COUNT:", token.count("."))
-        auth_user = supabase.auth.get_user(token)
 
-        if not auth_user.user:
-            raise HTTPException(401, "Invalid token")
+        auth_response = supabase.auth.get_user(token)
 
-        user_id = auth_user.user.id
+        # Supabase v2.x
+        auth_user = auth_response.user
+
+        if auth_user is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+
+        user_id = auth_user.id
 
         profile = (
             supabase.table("profiles")
@@ -44,12 +44,10 @@ async def get_current_user(
         # First login → automatically create profile
         if not profile.data:
 
-            auth_info = auth_user.user
-
             username = (
-                auth_info.user_metadata.get("full_name")
-                or auth_info.user_metadata.get("name")
-                or auth_info.email.split("@")[0]
+                auth_user.user_metadata.get("username")
+                or auth_user.user_metadata.get("full_name")
+                or auth_user.email.split("@")[0]
             )
 
             supabase.table("profiles").insert({
@@ -57,8 +55,7 @@ async def get_current_user(
                 "username": username,
                 "xp": 0,
                 "rank": "Scavenger",
-                "streak_days": 0,
-                "last_active": None
+                "streak_days": 0
             }).execute()
 
             profile = (
@@ -68,18 +65,22 @@ async def get_current_user(
                 .execute()
             )
 
-        profile = profile.data[0]
-
         class User:
             pass
 
         user = User()
 
-        for key, value in profile.data.items():
+        for key, value in profile.data[0].items():
             setattr(user, key, value)
 
         return user
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print("AUTH ERROR:", e)
-        raise HTTPException(401, "Authentication failed")
+
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication failed"
+        )
