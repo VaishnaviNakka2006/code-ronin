@@ -157,6 +157,13 @@
         </a>
 
         <a
+          href="/battle/lobby"
+          class="px-4 py-2 rounded-lg border border-yellow-400 text-yellow-400 hover:bg-yellow-400 hover:text-black transition-all font-mono"
+        >
+          ⚔️ BATTLE
+        </a>
+
+        <a
           href="/dojo"
           class="px-4 py-2 rounded-lg border border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-black transition-all font-mono"
         >

@@ -28,32 +28,45 @@ class BattleWebSocketService {
   // ---------- Public Methods ----------
   async connect(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return; // already connecting
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
 
     this.status.set('connecting');
 
-    // Get current session token
     const session = await supabase.auth.getSession();
+
+    console.log("=== SUPABASE SESSION ===");
+    console.log(session);
+
+    console.log("=== SESSION DATA ===");
+    console.log(session.data);
+
+    console.log("=== ACCESS TOKEN ===");
+    console.log(session.data.session?.access_token);
+
     const token = session.data.session?.access_token;
+
     if (!token) {
-      console.error('Battle WebSocket: No auth token available');
-      this.status.set('disconnected');
+      console.error("NO TOKEN FOUND");
+      this.status.set("disconnected");
       return;
     }
 
-    // Build WebSocket URL with token
-    const wsBase = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+    const wsBase = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
     const wsUrl = `${wsBase}/battle/ws?token=${token}`;
+
+    console.log("WS URL:", wsUrl);
 
     try {
       this.ws = new WebSocket(wsUrl);
+
       this.ws.onopen = this.onOpen.bind(this);
       this.ws.onmessage = this.handleWebSocketMessage.bind(this);
       this.ws.onclose = this.onClose.bind(this);
       this.ws.onerror = this.onError.bind(this);
+
     } catch (err) {
-      console.error('Battle WebSocket connection error:', err);
-      this.status.set('disconnected');
+      console.error("Battle WebSocket connection error:", err);
+      this.status.set("disconnected");
     }
   }
 
