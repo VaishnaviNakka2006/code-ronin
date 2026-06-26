@@ -38,12 +38,37 @@ async def get_current_user(
             supabase.table("profiles")
             .select("*")
             .eq("id", user_id)
-            .single()
             .execute()
         )
 
+        # First login → automatically create profile
         if not profile.data:
-            raise HTTPException(404, "Profile not found")
+
+            auth_info = auth_user.user
+
+            username = (
+                auth_info.user_metadata.get("full_name")
+                or auth_info.user_metadata.get("name")
+                or auth_info.email.split("@")[0]
+            )
+
+            supabase.table("profiles").insert({
+                "id": user_id,
+                "username": username,
+                "xp": 0,
+                "rank": "Scavenger",
+                "streak_days": 0,
+                "last_active": None
+            }).execute()
+
+            profile = (
+                supabase.table("profiles")
+                .select("*")
+                .eq("id", user_id)
+                .execute()
+            )
+
+        profile = profile.data[0]
 
         class User:
             pass
