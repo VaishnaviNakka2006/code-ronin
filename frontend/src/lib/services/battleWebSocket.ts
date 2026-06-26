@@ -48,7 +48,7 @@ class BattleWebSocketService {
     try {
       this.ws = new WebSocket(wsUrl);
       this.ws.onopen = this.onOpen.bind(this);
-      this.ws.onmessage = this.onMessage.bind(this);
+      this.ws.onmessage = this.handleWebSocketMessage.bind(this);
       this.ws.onclose = this.onClose.bind(this);
       this.ws.onerror = this.onError.bind(this);
     } catch (err) {
@@ -101,7 +101,7 @@ class BattleWebSocketService {
     this.clearReconnectTimer();
   }
 
-  private onMessage(event: MessageEvent): void {
+  private handleWebSocketMessage(event: MessageEvent): void {
     try {
       const data: BattleEvent = JSON.parse(event.data);
       this.handleMessage(data);
