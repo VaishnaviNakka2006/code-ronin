@@ -135,6 +135,11 @@
 
       const data = await res.json();
 
+      if (!res.ok) {
+          alert(data.detail || JSON.stringify(data));
+          return;
+      }
+
       alert(data.message);
 
     } catch (err) {

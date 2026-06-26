@@ -63,7 +63,13 @@ async def send_friend_request(target_user_id: str, user=Depends(get_current_user
         }
 
     except Exception as e:
-        print("ERROR:", repr(e))
+        import traceback
+
+        print("=" * 60)
+        print("SEND FRIEND REQUEST ERROR")
+        traceback.print_exc()
+        print("=" * 60)
+
         raise
 
 @router.post("/accept/{request_id}")
