@@ -6,54 +6,65 @@ router = APIRouter(prefix="/friends", tags=["friends"])
 
 @router.post("/request/{target_user_id}")
 async def send_friend_request(target_user_id: str, user=Depends(get_current_user)):
+    try:
 
-    print("CURRENT USER:", user.id)
-    print("TARGET USER:", target_user_id)
+        print("CURRENT USER:", user.id)
+        print("TARGET USER:", target_user_id)
 
-    if user.id == target_user_id:
-        print("SELF FRIEND BLOCKED")
-        raise HTTPException(400, "Cannot friend yourself")
+        if user.id == target_user_id:
+            raise HTTPException(400, "Cannot friend yourself")
 
-    existing = (
-        supabase.table("friend_requests")
-        .select("*")
-        .or_(
-            f"and(from_user_id.eq.{user.id},to_user_id.eq.{target_user_id}),and(from_user_id.eq.{target_user_id},to_user_id.eq.{user.id})"
-        )
-        .execute()
-    )
-
-    print("EXISTING REQUESTS:", existing.data)
-
-    if existing.data:
-        print("REQUEST ALREADY EXISTS")
-        raise HTTPException(
-            400,
-            "Friend request already sent or pending"
+        existing = (
+            supabase.table("friend_requests")
+            .select("*")
+            .or_(
+                f"and(from_user_id.eq.{user.id},to_user_id.eq.{target_user_id}),and(from_user_id.eq.{target_user_id},to_user_id.eq.{user.id})"
+            )
+            .execute()
         )
 
-    result = (
-        supabase.table("friend_requests")
-        .insert({
-            "from_user_id": user.id,
-            "to_user_id": target_user_id,
-            "status": "pending"
-        })
-        .execute()
-    )
+        print("EXISTING:", existing.data)
 
-    request_id = result.data[0]["id"] if result.data else None
+        if existing.data:
+            raise HTTPException(
+                400,
+                "Friend request already sent or pending"
+            )
 
-    #supabase.table("notifications").insert({
-    #    "user_id": target_user_id,
-    #    "type": "friend_request",
-    #    "content": f"{user.id} sent you a friend request",
-    #     "related_id": request_id
-    #}).execute()
+        result = (
+            supabase.table("friend_requests")
+            .insert({
+                "from_user_id": user.id,
+                "to_user_id": target_user_id,
+                "status": "pending"
+            })
+            .execute()
+        )
 
-    print("INSERT RESULT:", result.data)
+        print("INSERT:", result.data)
 
-    return {"message": "Friend request sent"}
+        request_id = result.data[0]["id"]
+
+        notification = (
+            supabase.table("notifications")
+            .insert({
+                "user_id": target_user_id,
+                "type": "friend_request",
+                "content": f"{user.id} sent you a friend request",
+                "related_id": request_id
+            })
+            .execute()
+        )
+
+        print("NOTIFICATION:", notification.data)
+
+        return {
+            "message": "Friend request sent"
+        }
+
+    except Exception as e:
+        print("ERROR:", repr(e))
+        raise
 
 @router.post("/accept/{request_id}")
 async def accept_friend_request(
