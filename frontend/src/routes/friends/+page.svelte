@@ -210,7 +210,7 @@
         />
 
         <button
-          on:click={sendFriendRequest}
+          on:click={() => alert("Use the Search Players section below to add friends.")}
           class="px-6 py-2 bg-cyan-500/20 border border-cyan-400 rounded-lg text-cyan-300 hover:bg-cyan-500/30 transition-all"
         >
           SEND
