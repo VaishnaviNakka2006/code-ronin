@@ -1,6 +1,7 @@
 import asyncio
 import json
 import uuid
+import os
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from app.deps import get_current_user
 from app.db import supabase
@@ -157,9 +158,8 @@ async def websocket_battle(websocket: WebSocket, token: str):
                                     "player2_ready": False,
                                 }
 
-                                print("ROOM CREATED:", room_id)
-                                print("ROOMS:", rooms)
-                                import os
+                
+                           
 
                                 print("=" * 60)
                                 print("PID:", os.getpid())
