@@ -71,6 +71,8 @@ async def send_room_state(room_id: str):
 # ---------- REST endpoints ----------
 @router.get("/room/{room_id}")
 async def get_room_info(room_id: str):
+    print("GET ROOM:", room_id)
+    print("AVAILABLE ROOMS:", list(rooms.keys()))
     """Get basic room info for the battle page."""
     async with room_lock:
         room = rooms.get(room_id)
@@ -117,6 +119,7 @@ async def websocket_battle(websocket: WebSocket, token: str):
 
                 # ---------- Matchmaking commands ----------
                 if msg_type == "join_queue":
+                    print(f"JOIN_QUEUE: {username} ({user_id})")
                     difficulty = data.get("difficulty", "easy")
                     if difficulty not in queues:
                         await websocket.send_json({"type": "error", "message": "Invalid difficulty"})
@@ -127,12 +130,14 @@ async def websocket_battle(websocket: WebSocket, token: str):
                             if user_id in queues[diff]:
                                 queues[diff].remove(user_id)
                         queues[difficulty].append(user_id)
+                        print("QUEUE =", queues[difficulty])
                     await websocket.send_json({"type": "queue_joined", "difficulty": difficulty})
                     logger.info(f"{username} joined {difficulty} queue")
 
                     # Check for match
                     async with queue_lock:
                         q = queues[difficulty]
+                        print(f"Queue length for {difficulty}: {len(q)}")
                         if len(q) >= 2:
                             p1 = q.pop(0)
                             p2 = q.pop(0)
@@ -146,6 +151,9 @@ async def websocket_battle(websocket: WebSocket, token: str):
                                     "player1_ready": False,
                                     "player2_ready": False,
                                 }
+
+                                print("ROOM CREATED:", room_id)
+                                print("ROOMS:", rooms)
                             # Fetch usernames
                             p1_user = supabase.table("profiles").select("username").eq("id", p1).execute()
                             p2_user = supabase.table("profiles").select("username").eq("id", p2).execute()
