@@ -71,8 +71,13 @@ async def send_room_state(room_id: str):
 # ---------- REST endpoints ----------
 @router.get("/room/{room_id}")
 async def get_room_info(room_id: str):
+    import os
+
+    print("=" * 60)
+    print("PID:", os.getpid())
     print("GET ROOM:", room_id)
-    print("AVAILABLE ROOMS:", list(rooms.keys()))
+    print("ROOMS:", list(rooms.keys()))
+    print("=" * 60)
     """Get basic room info for the battle page."""
     async with room_lock:
         room = rooms.get(room_id)
@@ -154,6 +159,13 @@ async def websocket_battle(websocket: WebSocket, token: str):
 
                                 print("ROOM CREATED:", room_id)
                                 print("ROOMS:", rooms)
+                                import os
+
+                                print("=" * 60)
+                                print("PID:", os.getpid())
+                                print("ROOM CREATED:", room_id)
+                                print("ROOMS:", list(rooms.keys()))
+                                print("=" * 60)
                             # Fetch usernames
                             p1_user = supabase.table("profiles").select("username").eq("id", p1).execute()
                             p2_user = supabase.table("profiles").select("username").eq("id", p2).execute()
