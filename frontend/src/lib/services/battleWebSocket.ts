@@ -74,7 +74,7 @@ class BattleWebSocketService {
           console.log('Battle WebSocket connected');
           resolve();
         };
-        this.ws.onmessage = this.onMessage.bind(this);
+        this.ws.onmessage = this.handleWebSocketMessage.bind(this);
         this.ws.onclose = this.onClose.bind(this);
         this.ws.onerror = (event) => {
           console.error('Battle WebSocket error:', event);
@@ -159,7 +159,7 @@ class BattleWebSocketService {
     }
   }
 
-  private onMessage(event: MessageEvent): void {
+  private handleWebSocketMessage(event: MessageEvent): void {
     try {
       const data: BattleEvent = JSON.parse(event.data);
       this.handleMessage(data);
