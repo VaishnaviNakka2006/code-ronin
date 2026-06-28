@@ -10,8 +10,6 @@ interface BattleEvent {
   [key: string]: any;
 }
 
-type MessageHandler = (event: BattleEvent) => void;
-
 // ---------- Service Class ----------
 class BattleWebSocketService {
   private ws: WebSocket | null = null;
@@ -19,9 +17,7 @@ class BattleWebSocketService {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // ms, doubles each attempt
   private reconnectTimer: number | null = null;
-  private messageHandlers: MessageHandler[] = [];
-  private pendingMessages: any[] = [];
-  private isConnected = false;
+  private messageHandler: ((event: BattleEvent) => void) | null = null;
 
   // Public stores
   public status: Writable<WebSocketStatus> = writable('disconnected');
@@ -32,66 +28,52 @@ class BattleWebSocketService {
   // ---------- Public Methods ----------
   async connect(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
-      // Wait for connection to complete
-      return new Promise((resolve) => {
-        const check = setInterval(() => {
-          if (this.ws?.readyState === WebSocket.OPEN) {
-            clearInterval(check);
-            resolve();
-          }
-          if (this.ws?.readyState === WebSocket.CLOSED) {
-            clearInterval(check);
-            this.connect(); // retry
-          }
-        }, 100);
-      });
-    }
-
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
+  
     this.status.set('connecting');
 
-    // Get current session token
     const session = await supabase.auth.getSession();
+
+    console.log("=== SUPABASE SESSION ===");
+    console.log(session);
+
+    console.log("=== SESSION DATA ===");
+    console.log(session.data);
+
+    console.log("=== ACCESS TOKEN ===");
+    console.log(session.data.session?.access_token);
+
     const token = session.data.session?.access_token;
+
     if (!token) {
-      console.error('Battle WebSocket: No auth token available');
-      this.status.set('disconnected');
-      throw new Error('No auth token');
+      console.error("NO TOKEN FOUND");
+      this.status.set("disconnected");
+      return;
     }
 
-    const wsBase = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+    const wsBase = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
     const wsUrl = `${wsBase}/battle/ws?token=${token}`;
 
-    return new Promise((resolve, reject) => {
-      try {
-        this.ws = new WebSocket(wsUrl);
-        this.ws.onopen = () => {
-          this.isConnected = true;
-          this.status.set('connected');
-          this.reconnectAttempts = 0;
-          this.clearReconnectTimer();
-          this.flushPendingMessages();
-          console.log('Battle WebSocket connected');
-          resolve();
-        };
-        this.ws.onmessage = this.onMessage.bind(this);
-        this.ws.onclose = this.onClose.bind(this);
-        this.ws.onerror = (event) => {
-          console.error('Battle WebSocket error:', event);
-          // Will be followed by onclose
-        };
-      } catch (err) {
-        this.status.set('disconnected');
-        reject(err);
-      }
-    });
+    console.log("WS URL:", wsUrl);
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = this.onOpen.bind(this);
+      this.ws.onmessage = this.handleWebSocketMessage.bind(this);
+      this.ws.onclose = this.onClose.bind(this);
+      this.ws.onerror = this.onError.bind(this);
+
+    } catch (err) {
+      console.error("Battle WebSocket connection error:", err);
+      this.status.set("disconnected");
+    }
   }
 
   disconnect(): void {
     this.clearReconnectTimer();
-    this.isConnected = false;
-    this.pendingMessages = [];
     if (this.ws) {
+      // Remove event listeners to prevent reconnection attempts
       this.ws.onopen = null;
       this.ws.onclose = null;
       this.ws.onmessage = null;
@@ -103,7 +85,6 @@ class BattleWebSocketService {
     this.resetStores();
   }
 
-  // Matchmaking commands (Phase 8.1)
   joinQueue(difficulty: string): void {
     this.send({ type: 'join_queue', difficulty });
   }
@@ -112,54 +93,28 @@ class BattleWebSocketService {
     this.send({ type: 'leave_queue' });
   }
 
-  // Battle room commands (Phase 8.2.1)
-  joinRoom(roomId: string): void {
-    this.send({ type: 'join_room', room_id: roomId });
-  }
-
-  ready(): void {
-    this.send({ type: 'ready' });
-  }
-
-  notReady(): void {
-    this.send({ type: 'not_ready' });
-  }
-
-  // Register a message handler – returns an unsubscribe function
-  onMessage(handler: MessageHandler): () => void {
-    this.messageHandlers.push(handler);
-    return () => {
-      const index = this.messageHandlers.indexOf(handler);
-      if (index !== -1) {
-        this.messageHandlers.splice(index, 1);
-      }
-    };
+  // Register a global message handler (optional)
+  onMessage(handler: (event: BattleEvent) => void): void {
+    this.messageHandler = handler;
   }
 
   // ---------- Private Methods ----------
   private send(message: any): void {
-    if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
-      // Queue message for later
-      this.pendingMessages.push(message);
-      // If not connected, trigger reconnect
-      if (!this.isConnected) {
-        this.connect().catch(console.error);
-      }
+      console.warn('Battle WebSocket: Cannot send, connection not open');
     }
   }
 
-  private flushPendingMessages(): void {
-    while (this.pendingMessages.length > 0) {
-      const msg = this.pendingMessages.shift();
-      if (msg && this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify(msg));
-      }
-    }
+  private onOpen(): void {
+    console.log('Battle WebSocket connected');
+    this.status.set('connected');
+    this.reconnectAttempts = 0;
+    this.clearReconnectTimer();
   }
 
-  private onMessage(event: MessageEvent): void {
+  private handleWebSocketMessage(event: MessageEvent): void {
     try {
       const data: BattleEvent = JSON.parse(event.data);
       this.handleMessage(data);
@@ -170,7 +125,6 @@ class BattleWebSocketService {
 
   private onClose(event: CloseEvent): void {
     console.log(`Battle WebSocket closed: ${event.code} ${event.reason}`);
-    this.isConnected = false;
     this.ws = null;
     this.status.set('disconnected');
 
@@ -183,13 +137,18 @@ class BattleWebSocketService {
     }
   }
 
+  private onError(event: Event): void {
+    console.error('Battle WebSocket error:', event);
+    // onClose will be called after this
+  }
+
   private scheduleReconnect(): void {
     this.clearReconnectTimer();
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
     this.reconnectAttempts++;
     console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
     this.reconnectTimer = window.setTimeout(() => {
-      this.connect().catch(console.error);
+      this.connect();
     }, delay);
   }
 
@@ -207,7 +166,7 @@ class BattleWebSocketService {
   }
 
   private handleMessage(data: BattleEvent): void {
-    // Update stores based on event type (Phase 8.1)
+    // Update stores based on event type
     switch (data.type) {
       case 'connected':
         this.status.set('connected');
@@ -230,17 +189,13 @@ class BattleWebSocketService {
         console.error('Battle WebSocket error from server:', data.message);
         break;
       default:
-        // For room_state and other events, just pass through
+        // Pass through unknown events
         break;
     }
 
-    // Notify all registered handlers
-    for (const handler of this.messageHandlers) {
-      try {
-        handler(data);
-      } catch (e) {
-        console.error('Error in message handler:', e);
-      }
+    // Forward to custom handler if set
+    if (this.messageHandler) {
+      this.messageHandler(data);
     }
   }
 }
