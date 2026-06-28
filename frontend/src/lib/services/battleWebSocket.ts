@@ -29,7 +29,7 @@ class BattleWebSocketService {
   async connect(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     if (this.ws && this.ws.readyState === WebSocket.CONNECTING) return;
-
+  
     this.status.set('connecting');
 
     const session = await supabase.auth.getSession();
