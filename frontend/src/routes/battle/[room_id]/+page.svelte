@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { battleWS } from '$lib/services/battleWebSocket';
   import { supabase } from '$lib/supabaseClient';
+  import { getBattleRoom } from '$lib/api/battle';
 
   let roomId = $page.params.room_id;
   let roomInfo: any = null;
@@ -16,9 +17,7 @@
 
   async function fetchRoom() {
     try {
-      const res = await fetch(`/api/battle/room/${roomId}`);
-      if (!res.ok) throw new Error('Room not found');
-      roomInfo = await res.json();
+      roomInfo = await getBattleRoom(roomId);
     } catch (err: any) {
       console.error(err);
       error = 'Failed to load room details.';
