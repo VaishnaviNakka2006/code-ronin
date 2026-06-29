@@ -34,7 +34,11 @@
 
     // Connect WebSocket and join room
     await battleWS.connect();
+
     battleWS.joinRoom(roomId);
+
+    // Give the server a moment to register the room
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     // Listen for room_state events
     const unsubscribe = battleWS.onMessage((event) => {

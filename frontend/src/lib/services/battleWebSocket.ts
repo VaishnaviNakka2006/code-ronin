@@ -229,6 +229,9 @@ class BattleWebSocketService {
       case 'error':
         console.error('Battle WebSocket error from server:', data.message);
         break;
+      case 'room_joined':
+        console.log('Joined room', data.room_id);
+        break;
       default:
         // For room_state and other events, just pass through
         break;

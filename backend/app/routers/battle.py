@@ -210,7 +210,17 @@ async def websocket_battle(websocket: WebSocket, token: str):
                             await websocket.send_json({"type": "error", "message": "You are not in this room"})
                             continue
                         # Store room mapping
+                        # Store room mapping
                         user_room[user_id] = room_id
+
+                        logger.info(f"{username} joined room {room_id}")
+
+                        # Tell this client the join succeeded
+                        await websocket.send_json({
+                            "type": "room_joined",
+                            "room_id": room_id
+                        })
+
                     # Send current room state
                     await send_room_state(room_id)
 
