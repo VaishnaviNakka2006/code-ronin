@@ -131,12 +131,18 @@ async def websocket_battle(websocket: WebSocket, token: str):
                         await websocket.send_json({"type": "error", "message": "Invalid difficulty"})
                         continue
                     async with queue_lock:
-                        # Remove from any existing queue
+                        print("================================================")
+                        print("BEFORE:", queues)
+
                         for diff in queues:
                             if user_id in queues[diff]:
                                 queues[diff].remove(user_id)
+
                         queues[difficulty].append(user_id)
-                        print("QUEUE =", queues[difficulty])
+
+                        print("AFTER:", queues)
+                        print("QUEUE LENGTH:", len(queues[difficulty]))
+                        print("================================================")
                     await websocket.send_json({"type": "queue_joined", "difficulty": difficulty})
                     logger.info(f"{username} joined {difficulty} queue")
 
