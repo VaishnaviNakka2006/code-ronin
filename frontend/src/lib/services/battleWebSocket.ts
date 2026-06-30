@@ -160,11 +160,17 @@ class BattleWebSocketService {
   }
 
   private handleWebSocketMessage(event: MessageEvent): void {
+    console.log("RAW WS MESSAGE:", event.data);
+
     try {
-      const data: BattleEvent = JSON.parse(event.data);
+      const data = JSON.parse(event.data);
+
+      console.log("PARSED WS:", data);
+
       this.handleMessage(data);
+
     } catch (e) {
-      console.error('Battle WebSocket: Invalid JSON received', e);
+      console.error("Invalid websocket message", e);
     }
   }
 
@@ -208,6 +214,7 @@ class BattleWebSocketService {
 
   private handleMessage(data: BattleEvent): void {
     // Update stores based on event type (Phase 8.1)
+    console.log("HANDLE MESSAGE:", data.type, data);
     switch (data.type) {
       case 'connected':
         this.status.set('connected');

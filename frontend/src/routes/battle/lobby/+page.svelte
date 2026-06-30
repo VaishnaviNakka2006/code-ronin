@@ -46,11 +46,18 @@
     });
 
     battleWS.onMessage((event) => {
-      if (event.type === 'battle_found') {
-        setTimeout(() => {
-          goto(`/battle/${event.room_id}`);
-        }, 1500);
-      }
+
+        console.log("LOBBY EVENT:", event);
+
+        if (event.type === "battle_found") {
+
+            console.log("MATCH FOUND");
+
+            console.log(event);
+
+            goto(`/battle/${event.room_id}`);
+        }
+
     });
 
     return () => {
