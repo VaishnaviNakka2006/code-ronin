@@ -36,7 +36,7 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     await battleWS.connect();
 
     unsubscribeStatus = battleWS.status.subscribe((status) => {
