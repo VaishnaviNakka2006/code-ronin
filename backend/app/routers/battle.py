@@ -39,13 +39,24 @@ async def get_user_from_token(token: str):
 
 
 async def send_to_user(user_id: str, message: dict):
-    """Send a JSON message to a specific user if connected."""
+    print("=" * 60)
+    print("SEND_TO_USER")
+    print("TARGET:", user_id)
+    print("CONNECTED USERS:", list(active_connections.keys()))
+    print("MESSAGE:", message)
+    print("=" * 60)
+
     ws = active_connections.get(user_id)
+
     if ws:
         try:
             await ws.send_json(message)
-        except Exception:
+            print("MESSAGE SENT")
+        except Exception as e:
+            print("SEND ERROR:", e)
             active_connections.pop(user_id, None)
+    else:
+        print("NO WEBSOCKET FOUND")
 
 
 async def send_room_state(room_id: str):
