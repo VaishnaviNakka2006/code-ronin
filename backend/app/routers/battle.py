@@ -163,6 +163,14 @@ async def websocket_battle(websocket: WebSocket, token: str):
 
                         print("AFTER:", queues)
                         print("QUEUE LENGTH:", len(queues[difficulty]))
+
+                        # ADD THESE LINES
+                        print("=" * 60)
+                        print("PID:", os.getpid())
+                        print("QUEUE:", queues[difficulty])
+                        print("QUEUE LENGTH:", len(queues[difficulty]))
+                        print("=" * 60)
+
                         print("================================================")
                     await websocket.send_json({"type": "queue_joined", "difficulty": difficulty})
                     logger.info(f"{username} joined {difficulty} queue")
@@ -170,7 +178,17 @@ async def websocket_battle(websocket: WebSocket, token: str):
                     # Check for match
                     async with queue_lock:
                         q = queues[difficulty]
+
                         print(f"Queue length for {difficulty}: {len(q)}")
+
+                        # ADD THESE LINES
+                        print("=" * 60)
+                        print("PID:", os.getpid())
+                        print("MATCH CHECK")
+                        print("QUEUE:", q)
+                        print("LENGTH:", len(q))
+                        print("=" * 60)
+
                         if len(q) >= 2:
                             p1 = q.pop(0)
                             p2 = q.pop(0)
