@@ -37,7 +37,7 @@
   }
 
   onMount(() => {
-    battleWS.connect();
+    await battleWS.connect();
 
     unsubscribeStatus = battleWS.status.subscribe((status) => {
       updateStatus(status);
@@ -62,11 +62,9 @@
 
     return () => {
       if (unsubscribeStatus) {
-        unsubscribeStatus();
-      }
-
-      battleWS.disconnect();
-    };
+      unsubscribeStatus();
+    }
+  };
   });
 
   function findMatch() {
