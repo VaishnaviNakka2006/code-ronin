@@ -123,6 +123,16 @@ async def websocket_battle(websocket: WebSocket, token: str):
 
     await websocket.accept()
     active_connections[user_id] = websocket
+    # Restore room after reconnect
+    existing_room = user_room.get(user_id)
+
+    if existing_room:
+        await websocket.send_json({
+            "type": "room_joined",
+            "room_id": existing_room
+        })
+
+        await send_room_state(existing_room)
     logger.info(f"User {username} connected to battle WebSocket")
 
     try:
@@ -303,7 +313,7 @@ async def websocket_battle(websocket: WebSocket, token: str):
                 if user_id in queues[diff]:
                     queues[diff].remove(user_id)
         # Remove from room if any, and broadcast updated room state
-        room_id = user_room.pop(user_id, None)
+        room_id = user_room.get(user_id)
         if room_id:
             async with room_lock:
                 room = rooms.get(room_id)
@@ -325,7 +335,7 @@ async def websocket_battle(websocket: WebSocket, token: str):
         logger.error(f"WebSocket error: {e}")
         # Clean up
         active_connections.pop(user_id, None)
-        room_id = user_room.pop(user_id, None)
+        room_id = user_room.get(user_id)
         if room_id:
             # Optionally broadcast state change
             async with room_lock:
