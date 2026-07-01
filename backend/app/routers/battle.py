@@ -6,6 +6,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from app.deps import get_current_user
 from app.db import supabase
 import logging
+import traceback
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +351,7 @@ async def websocket_battle(websocket: WebSocket, token: str):
         logger.info(f"User {username} disconnected")
 
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(traceback.format_exc())
         # Clean up
         active_connections.pop(user_id, None)
         room_id = user_room.get(user_id)
