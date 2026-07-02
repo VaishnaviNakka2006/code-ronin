@@ -15,6 +15,9 @@
   let roomStatus = 'waiting';
   let error = '';
 
+  let countdown: number | null = null;
+  let battleStarted = false;
+
   async function fetchRoom() {
     try {
       roomInfo = await getBattleRoom(roomId);
@@ -42,8 +45,15 @@
 
     // Listen for room_state events
     const unsubscribe = battleWS.onMessage((event) => {
+
+      // Room state updates
       if (event.type === 'room_state' && event.room_id === roomId) {
         roomStatus = event.status;
+
+        if (event.status !== 'active') {
+          battleStarted = false;
+        }
+
         if (event.player1_id === myUserId) {
           myReady = event.player1_ready;
           opponentReady = event.player2_ready;
@@ -52,6 +62,19 @@
           opponentReady = event.player1_ready;
         }
       }
+
+      // Countdown updates
+      if (event.type === 'countdown_update' && event.room_id === roomId) {
+        countdown = event.countdown;
+      }
+
+      // Battle started
+      if (event.type === 'battle_start' && event.room_id === roomId) {
+        battleStarted = true;
+        countdown = null;
+        roomStatus = 'active';
+      }
+
     });
 
     return () => {
@@ -126,23 +149,47 @@
           </div>
         </div>
 
-        <!-- Ready button -->
-        <div class="mt-8 text-center">
-          <button
-            on:click={toggleReady}
-            disabled={roomStatus !== 'waiting' && roomStatus !== 'ready'}
-            class="px-6 py-3 bg-neon-cyan text-black font-bold rounded-lg hover:shadow-[0_0_20px_#00f3ff] transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {myReady ? 'NOT READY' : 'READY'}
-          </button>
-          <p class="mt-2 text-sm text-gray-400">
-            {#if roomStatus === 'waiting' || roomStatus === 'ready'}
-              {#if myReady}You are ready. Waiting for opponent...{:else}Click "READY" when you are prepared.{/if}
-            {:else}
-              Battle already in progress.
-            {/if}
-          </p>
-        </div>
+        {#if countdown !== null && !battleStarted}
+          <div class="text-center py-8">
+            <p class="text-8xl font-mono text-neon-cyan glow-text animate-pulse">
+              {countdown}
+            </p>
+            <p class="text-sm text-gray-400 mt-2">
+              Get ready!
+            </p>
+          </div>
+        {/if}
+
+        {#if !battleStarted && countdown === null}
+          <div class="mt-8 text-center">
+            <button
+              on:click={toggleReady}
+              disabled={roomStatus !== 'waiting' && roomStatus !== 'ready'}
+              class="px-6 py-3 bg-neon-cyan text-black font-bold rounded-lg hover:shadow-[0_0_20px_#00f3ff] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {myReady ? 'NOT READY' : 'READY'}
+            </button>
+
+            <p class="mt-2 text-sm text-gray-400">
+              {#if roomStatus === 'waiting' || roomStatus === 'ready'}
+                {#if myReady}
+                  You are ready. Waiting for opponent...
+                {:else}
+                  Click "READY" when you are prepared.
+                {/if}
+              {:else}
+                Battle already in progress.
+              {/if}
+            </p>
+          </div>
+
+        {:else if battleStarted}
+
+          <div class="mt-8 text-center text-neon-magenta font-mono text-2xl animate-pulse">
+            ⚔️ BATTLE IN PROGRESS
+          </div>
+
+        {/if}
 
         <div class="mt-6 text-center">
           <button on:click={() => goto('/dashboard')} class="text-sm text-gray-500 hover:text-neon-cyan transition">

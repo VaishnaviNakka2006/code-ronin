@@ -80,6 +80,89 @@ async def send_room_state(room_id: str):
     await send_to_user(room["player1_id"], state)
     await send_to_user(room["player2_id"], state)
 
+async def send_countdown_update(room_id: str, countdown: int):
+    """Send countdown to both players."""
+
+    async with room_lock:
+        room = rooms.get(room_id)
+
+        if not room:
+            return
+
+    await send_to_user(
+        room["player1_id"],
+        {
+            "type": "countdown_update",
+            "room_id": room_id,
+            "countdown": countdown
+        }
+    )
+
+    await send_to_user(
+        room["player2_id"],
+        {
+            "type": "countdown_update",
+            "room_id": room_id,
+            "countdown": countdown
+        }
+    )
+
+async def start_countdown(room_id: str):
+
+    try:
+
+        async with room_lock:
+
+            room = rooms.get(room_id)
+
+            if not room:
+                return
+
+            room["status"] = "countdown"
+
+        await send_room_state(room_id)
+
+        for i in [3, 2, 1]:
+
+            await send_countdown_update(room_id, i)
+
+            await asyncio.sleep(1)
+
+        async with room_lock:
+
+            room = rooms.get(room_id)
+
+            if not room:
+                return
+
+            room["status"] = "active"
+
+            room["countdown_task"] = None
+
+        await send_to_user(
+            room["player1_id"],
+            {
+                "type": "battle_start",
+                "room_id": room_id
+            }
+        )
+
+        await send_to_user(
+            room["player2_id"],
+            {
+                "type": "battle_start",
+                "room_id": room_id
+            }
+        )
+
+        await send_room_state(room_id)
+
+    except asyncio.CancelledError:
+
+        logger.info(f"Countdown cancelled for {room_id}")
+
+
+
 
 # ---------- REST endpoints ----------
 @router.get("/room/{room_id}")
@@ -202,6 +285,7 @@ async def websocket_battle(websocket: WebSocket, token: str):
                                     "status": "waiting",
                                     "player1_ready": False,
                                     "player2_ready": False,
+                                    "countdown_task": None,
                                 }
 
                 
@@ -290,8 +374,20 @@ async def websocket_battle(websocket: WebSocket, token: str):
                             room["player2_ready"] = True
                         # Update room status
                         if room.get("player1_ready") and room.get("player2_ready"):
+
                             room["status"] = "ready"
+
+                            if (
+                                room.get("countdown_task") is None
+                                or room["countdown_task"].done()
+                            ):
+
+                                task = asyncio.create_task(start_countdown(room_id))
+
+                                room["countdown_task"] = task
+
                         else:
+
                             room["status"] = "waiting"
                     await send_room_state(room_id)
 
@@ -314,6 +410,12 @@ async def websocket_battle(websocket: WebSocket, token: str):
                         elif room["player2_id"] == user_id:
                             room["player2_ready"] = False
                         room["status"] = "waiting"
+                        if (
+                            room.get("countdown_task")
+                            and not room["countdown_task"].done()
+                        ):
+                            room["countdown_task"].cancel()
+                            room["countdown_task"] = None
                     await send_room_state(room_id)
 
                 elif msg_type == "ping":
@@ -337,6 +439,13 @@ async def websocket_battle(websocket: WebSocket, token: str):
             async with room_lock:
                 room = rooms.get(room_id)
                 if room:
+                    # Cancel countdown if running
+                    if (
+                        room.get("countdown_task")
+                        and not room["countdown_task"].done()
+                    ):
+                        room["countdown_task"].cancel()
+                        room["countdown_task"] = None
                     # Mark this user as not ready if they were
                     if room.get("player1_id") == user_id:
                         room["player1_ready"] = False
@@ -360,6 +469,13 @@ async def websocket_battle(websocket: WebSocket, token: str):
             async with room_lock:
                 room = rooms.get(room_id)
                 if room:
+                    # Cancel countdown if running
+                    if (
+                        room.get("countdown_task")
+                        and not room["countdown_task"].done()
+                    ):
+                        room["countdown_task"].cancel()
+                        room["countdown_task"] = None
                     if room.get("player1_id") == user_id:
                         room["player1_ready"] = False
                     elif room.get("player2_id") == user_id:
