@@ -10,6 +10,59 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
+# ---------- Problem pool ----------
+PROBLEMS = {
+    "easy": [
+        {
+            "title": "Sum of Two Numbers",
+            "description": "Write a function `add(a, b)` that returns the sum of two integers.",
+            "starter_code": "def add(a, b):\n    # Your code here\n    pass",
+            "test_cases": [
+                {"input": "add(2,3)", "expected": "5"},
+                {"input": "add(-1,1)", "expected": "0"}
+            ]
+        },
+        {
+            "title": "Even or Odd",
+            "description": "Write a function `is_even(n)` that returns True if n is even, else False.",
+            "starter_code": "def is_even(n):\n    # Your code here\n    pass",
+            "test_cases": [
+                {"input": "is_even(4)", "expected": "True"},
+                {"input": "is_even(7)", "expected": "False"}
+            ]
+        }
+    ],
+    "medium": [
+        {
+            "title": "Factorial",
+            "description": "Write a function `factorial(n)` that returns n! (n factorial).",
+            "starter_code": "def factorial(n):\n    # Your code here\n    pass",
+            "test_cases": [
+                {"input": "factorial(5)", "expected": "120"},
+                {"input": "factorial(0)", "expected": "1"}
+            ]
+        }
+    ],
+    "hard": [
+        {
+            "title": "Fibonacci",
+            "description": "Write a function `fib(n)` that returns the nth Fibonacci number.",
+            "starter_code": "def fib(n):\n    # Your code here\n    pass",
+            "test_cases": [
+                {"input": "fib(6)", "expected": "8"},
+                {"input": "fib(1)", "expected": "1"}
+            ]
+        }
+    ]
+}
+
+def get_problem_for_difficulty(difficulty: str, seed: str) -> dict:
+    import hashlib
+
+    problems = PROBLEMS.get(difficulty, PROBLEMS["easy"])
+    idx = int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(problems)
+    return problems[idx]
+
 router = APIRouter(prefix="/battle", tags=["battle"])
 
 # ---------- In‑memory state ----------
@@ -135,15 +188,23 @@ async def start_countdown(room_id: str):
             if not room:
                 return
 
-            room["status"] = "active"
+            difficulty = room["difficulty"]
 
+            problem = get_problem_for_difficulty(
+                difficulty,
+                room_id
+            )
+
+            room["problem"] = problem
+            room["status"] = "active"
             room["countdown_task"] = None
 
         await send_to_user(
             room["player1_id"],
             {
                 "type": "battle_start",
-                "room_id": room_id
+                "room_id": room_id,
+                "problem": problem
             }
         )
 
@@ -151,11 +212,16 @@ async def start_countdown(room_id: str):
             room["player2_id"],
             {
                 "type": "battle_start",
-                "room_id": room_id
+                "room_id": room_id,
+                "problem": problem
             }
         )
 
         await send_room_state(room_id)
+
+        logger.info(
+            f"Battle started in room {room_id} with problem: {problem['title']}"
+        )
 
     except asyncio.CancelledError:
 
@@ -286,6 +352,7 @@ async def websocket_battle(websocket: WebSocket, token: str):
                                     "player1_ready": False,
                                     "player2_ready": False,
                                     "countdown_task": None,
+                                    "problem": None,
                                 }
 
                 

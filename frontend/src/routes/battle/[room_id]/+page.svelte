@@ -17,6 +17,7 @@
 
   let countdown: number | null = null;
   let battleStarted = false;
+  let problemData: any = null;
 
   async function fetchRoom() {
     try {
@@ -52,6 +53,7 @@
 
         if (event.status !== 'active') {
           battleStarted = false;
+          problemData = null;
         }
 
         if (event.player1_id === myUserId) {
@@ -73,6 +75,7 @@
         battleStarted = true;
         countdown = null;
         roomStatus = 'active';
+        problemData = event.problem;
       }
 
     });
@@ -181,6 +184,29 @@
                 Battle already in progress.
               {/if}
             </p>
+          </div>
+
+        {:else if battleStarted && problemData}
+          <div class="mt-6 p-4 bg-black/60 rounded-lg border border-neon-cyan">
+
+            <h2 class="text-2xl font-mono text-neon-cyan glow-text">
+              {problemData.title}
+            </h2>
+
+            <p class="text-gray-300 mt-2 whitespace-pre-wrap">
+              {problemData.description}
+            </p>
+
+            <div class="mt-4">
+              <p class="text-sm text-gray-400">
+                Starter code
+              </p>
+
+              <pre class="bg-black/80 p-3 rounded border border-gray-700 font-mono text-sm text-green-400 overflow-x-auto">
+        {problemData.starter_code}
+              </pre>
+            </div>
+
           </div>
 
         {:else if battleStarted}
