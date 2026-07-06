@@ -18,6 +18,7 @@
   let countdown: number | null = null;
   let battleStarted = false;
   let problemData: any = null;
+  let timerSeconds: number | null = null;
 
   async function fetchRoom() {
     try {
@@ -51,9 +52,10 @@
       if (event.type === 'room_state' && event.room_id === roomId) {
         roomStatus = event.status;
 
-        if (event.status !== 'active') {
-          battleStarted = false;
-          problemData = null;
+        if (event.status !== 'active' && event.status !== 'finished') {
+            battleStarted = false;
+            problemData = null;
+            timerSeconds = null;
         }
 
         if (event.player1_id === myUserId) {
@@ -78,6 +80,16 @@
         problemData = event.problem;
       }
 
+      // Timer updates
+      if (event.type === 'timer_update' && event.room_id === roomId) {
+        timerSeconds = event.seconds;
+      }
+
+      // Timer finished
+      if (event.type === 'timer_end' && event.room_id === roomId) {
+        timerSeconds = 0;
+      }
+
     });
 
     return () => {
@@ -97,6 +109,15 @@
     }
   }
 
+  function formatTime(seconds: number): string {
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+
+    return `${minutes.toString().padStart(2, '0')}:${secs
+      .toString()
+      .padStart(2, '0')}`;
+  }
+
   $: statusLabel = roomStatus.toUpperCase();
 </script>
 
@@ -114,6 +135,12 @@
           <span>Room: <span class="font-mono text-neon-cyan">{roomId.slice(0, 8)}</span></span>
           <span>Difficulty: <span class="text-yellow-400 font-mono">{roomInfo.difficulty}</span></span>
           <span>Status: <span class="font-mono {roomStatus === 'ready' ? 'text-green-400' : 'text-yellow-400'}">{statusLabel}</span></span>
+          <span>
+            ⏱️
+            <span class="font-mono text-neon-cyan">
+              {timerSeconds !== null ? formatTime(timerSeconds) : '--:--'}
+            </span>
+          </span>
         </div>
 
         <!-- Players -->

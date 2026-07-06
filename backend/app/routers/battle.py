@@ -217,6 +217,8 @@ async def start_countdown(room_id: str):
             }
         )
 
+        await start_battle_timer(room_id)
+
         await send_room_state(room_id)
 
         logger.info(
@@ -226,6 +228,64 @@ async def start_countdown(room_id: str):
     except asyncio.CancelledError:
 
         logger.info(f"Countdown cancelled for {room_id}")
+
+
+async def start_battle_timer(room_id: str):
+    """Run a 15‑minute battle timer, sending updates every second."""
+    async with room_lock:
+        room = rooms.get(room_id)
+        if not room:
+            return
+        # Cancel any existing timer task
+        if room.get("timer_task") and not room["timer_task"].done():
+            room["timer_task"].cancel()
+        room["time_remaining"] = 900  # 15 minutes
+        room["timer_task"] = asyncio.create_task(_tick_timer(room_id))
+        # Send initial timer update immediately
+        await send_timer_update(room_id, room["time_remaining"])
+
+async def _tick_timer(room_id: str):
+    """Internal function that ticks the timer every second."""
+    while True:
+        await asyncio.sleep(1)
+        async with room_lock:
+            room = rooms.get(room_id)
+            if not room:
+                return
+            if "time_remaining" not in room:
+                return
+            room["time_remaining"] -= 1
+            remaining = room["time_remaining"]
+        # Broadcast update
+        await send_timer_update(room_id, remaining)
+        if remaining <= 0:
+            # Timer ended
+            await on_timer_end(room_id)
+            return
+
+async def send_timer_update(room_id: str, seconds: int):
+    """Send a timer_update event to both players."""
+    async with room_lock:
+        room = rooms.get(room_id)
+        if not room:
+            return
+    await send_to_user(room["player1_id"], {"type": "timer_update", "seconds": seconds, "room_id": room_id})
+    await send_to_user(room["player2_id"], {"type": "timer_update", "seconds": seconds, "room_id": room_id})
+
+async def on_timer_end(room_id: str):
+    """Handle timer expiration – broadcast event and update room status."""
+    async with room_lock:
+        room = rooms.get(room_id)
+        if not room:
+            return
+        # Set status to 'finished' (we'll use this later for winner detection)
+        room["status"] = "finished"
+        if room.get("timer_task"):
+            room["timer_task"] = None
+    # Broadcast timer_end event
+    await send_to_user(room["player1_id"], {"type": "timer_end", "room_id": room_id})
+    await send_to_user(room["player2_id"], {"type": "timer_end", "room_id": room_id})
+    logger.info(f"Timer ended in room {room_id}")
 
 
 
@@ -353,6 +413,8 @@ async def websocket_battle(websocket: WebSocket, token: str):
                                     "player2_ready": False,
                                     "countdown_task": None,
                                     "problem": None,
+                                    "timer_task": None,
+                                    "timer_remaining":900,
                                 }
 
                 
@@ -513,6 +575,13 @@ async def websocket_battle(websocket: WebSocket, token: str):
                     ):
                         room["countdown_task"].cancel()
                         room["countdown_task"] = None
+
+                    if (
+                        room.get("timer_task")
+                        and not room["timer_task"].done()
+                    ):
+                        room["timer_task"].cancel()
+                        room["timer_task"] = None
                     # Mark this user as not ready if they were
                     if room.get("player1_id") == user_id:
                         room["player1_ready"] = False
@@ -543,6 +612,12 @@ async def websocket_battle(websocket: WebSocket, token: str):
                     ):
                         room["countdown_task"].cancel()
                         room["countdown_task"] = None
+                    if (
+                        room.get("timer_task")
+                        and not room["timer_task"].done()
+                    ):
+                        room["timer_task"].cancel()
+                        room["timer_task"] = None
                     if room.get("player1_id") == user_id:
                         room["player1_ready"] = False
                     elif room.get("player2_id") == user_id:
