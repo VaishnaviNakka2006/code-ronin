@@ -5,6 +5,7 @@
   import { battleWS } from '$lib/services/battleWebSocket';
   import { supabase } from '$lib/supabaseClient';
   import { getBattleRoom } from '$lib/api/battle';
+  import CodeEditor from '$lib/components/CodeEditor.svelte';
 
   let roomId = $page.params.room_id;
   let roomInfo: any = null;
@@ -19,7 +20,19 @@
   let battleStarted = false;
   let problemData: any = null;
   let timerSeconds: number | null = null;
+  let code = '';
+  let codeResult: any = null;
+  let isSubmitting = false;
+  function submitCode() {
 
+    if (!code.trim()) {
+      return;
+    }
+
+    isSubmitting = true;
+
+    battleWS.submitCode(code);
+  }
   async function fetchRoom() {
     try {
       roomInfo = await getBattleRoom(roomId);
@@ -49,6 +62,7 @@
     const unsubscribe = battleWS.onMessage((event) => {
 
       // Room state updates
+      
       if (event.type === 'room_state' && event.room_id === roomId) {
         roomStatus = event.status;
 
@@ -56,6 +70,23 @@
             battleStarted = false;
             problemData = null;
             timerSeconds = null;
+        }
+
+        if (
+          event.type === 'code_result' &&
+          event.room_id === roomId
+        ) {
+
+          isSubmitting = false;
+
+          codeResult = event;
+        }
+
+        if (event.type === 'error') {
+
+          isSubmitting = false;
+
+          error = event.message || 'Battle error';
         }
 
         if (event.player1_id === myUserId) {
@@ -74,10 +105,18 @@
 
       // Battle started
       if (event.type === 'battle_start' && event.room_id === roomId) {
+
         battleStarted = true;
+
         countdown = null;
+
         roomStatus = 'active';
+
         problemData = event.problem;
+
+        code = event.problem.starter_code || '';
+
+        codeResult = null;
       }
 
       // Timer updates
@@ -230,6 +269,68 @@
               </p>
 
               <pre class="bg-black/80 p-3 rounded border border-gray-700 font-mono text-sm text-green-400 overflow-x-auto">
+
+            <div class="mt-6">
+              <p class="text-sm text-gray-400 mb-2">
+                Your Solution
+              </p>
+
+              <CodeEditor
+                bind:code={code}
+                language="python"
+              />
+            </div>
+
+            <div class="mt-4">
+              <button
+                on:click={submitCode}
+                disabled={isSubmitting || !code.trim()}
+                class="px-6 py-3 bg-neon-cyan text-black font-bold rounded-lg hover:shadow-[0_0_20px_#00f3ff] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {#if isSubmitting}
+                  RUNNING...
+                {:else}
+                  ⚡ RUN CODE
+                {/if}
+              </button>
+            </div>
+
+            {#if codeResult}
+
+              <div class="mt-6 p-4 bg-black/60 rounded-lg border border-gray-700">
+
+                <h3 class="text-lg font-mono text-neon-cyan mb-3">
+                  TEST RESULTS
+                </h3>
+
+                <div class="flex gap-6 text-sm">
+
+                  <span>
+                    Passed:
+                    <span class="text-green-400">
+                      {codeResult.tests_passed}
+                    </span>
+                    /
+                    {codeResult.total_tests}
+                  </span>
+
+                  <span>
+                    Score:
+                    <span class="text-yellow-400">
+                      {Math.round(codeResult.score * 100)}%
+                    </span>
+                  </span>
+
+                </div>
+
+                <pre
+                  class="mt-4 p-3 bg-black/80 rounded text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto"
+                >{codeResult.output}</pre>
+
+              </div>
+
+            {/if}
+            
         {problemData.starter_code}
               </pre>
             </div>

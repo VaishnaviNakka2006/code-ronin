@@ -120,7 +120,12 @@ class BattleWebSocketService {
   ready(): void {
     this.send({ type: 'ready' });
   }
-
+  submitCode(code: string): void {
+    this.send({
+      type: 'submit_code',
+      code
+    });
+  }
   notReady(): void {
     this.send({ type: 'not_ready' });
   }

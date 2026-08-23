@@ -7,6 +7,7 @@ from app.deps import get_current_user
 from app.db import supabase
 import logging
 import traceback
+from app.services.mission_engine import MissionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,87 @@ def get_problem_for_difficulty(difficulty: str, seed: str) -> dict:
     problems = PROBLEMS.get(difficulty, PROBLEMS["easy"])
     idx = int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(problems)
     return problems[idx]
+
+def _convert_test_cases(test_cases):
+    """Convert battle test cases for MissionEngine."""
+    return [
+        {
+            "input": tc.get("input", ""),
+            "expected_output": tc.get("expected", ""),
+        }
+        for tc in test_cases
+    ]
+
+def run_battle_tests(test_cases, user_code):
+    passed = 0
+    total = len(test_cases)
+    details = []
+
+    namespace = {}
+
+    try:
+        exec(user_code, namespace, namespace)
+
+    except Exception as e:
+        return {
+            "success": False,
+            "score": 0,
+            "tests_passed": 0,
+            "total_tests": total,
+            "output": f"Code error: {str(e)}",
+            "details": []
+        }
+
+    for index, tc in enumerate(test_cases):
+
+        test_input = tc.get("input", "")
+        expected = str(tc.get("expected", "")).strip()
+
+        try:
+            actual_result = eval(
+                test_input,
+                namespace,
+                namespace
+            )
+
+            actual = str(actual_result).strip()
+
+            is_pass = actual == expected
+
+        except Exception as e:
+
+            actual = str(e)
+
+            is_pass = False
+
+        if is_pass:
+            passed += 1
+
+        details.append({
+            "test_id": index + 1,
+            "passed": is_pass,
+            "expected": expected,
+            "actual": actual
+        })
+
+    score = passed / total if total > 0 else 0
+
+    return {
+        "success": passed == total,
+        "score": score,
+        "tests_passed": passed,
+        "total_tests": total,
+        "output": "\n".join(
+            [
+                f"{'✓' if d['passed'] else '✗'} "
+                f"Test {d['test_id']}: "
+                f"expected '{d['expected']}', "
+                f"got '{d['actual']}'"
+                for d in details
+            ]
+        ),
+        "details": details
+    }
 
 router = APIRouter(prefix="/battle", tags=["battle"])
 
@@ -546,6 +628,87 @@ async def websocket_battle(websocket: WebSocket, token: str):
                             room["countdown_task"].cancel()
                             room["countdown_task"] = None
                     await send_room_state(room_id)
+
+
+                elif msg_type == "submit_code":
+                    room_id = user_room.get(user_id)
+
+                    if not room_id:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Not in a room"
+                        })
+                        continue
+
+                    code = data.get("code", "")
+
+                    if not code.strip():
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Code is empty"
+                        })
+                        continue
+
+                    async with room_lock:
+                        room = rooms.get(room_id)
+
+                        if not room:
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": "Room not found"
+                            })
+                            continue
+
+                        if room["status"] != "active":
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": "Battle not active"
+                            })
+                            continue
+
+                        problem = room.get("problem")
+
+                        if not problem:
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": "No problem assigned"
+                            })
+                            continue
+
+                        test_cases = problem.get("test_cases", [])
+
+                    converted_test_cases = _convert_test_cases(test_cases)
+
+                    try:
+                        result = MissionEngine.run_tests_from_list(
+                            converted_test_cases,
+                            code
+                        )
+
+                        await websocket.send_json({
+                            "type": "code_result",
+                            "room_id": room_id,
+                            "success": result["success"],
+                            "score": result["score"],
+                            "tests_passed": result["tests_passed"],
+                            "total_tests": result["total_tests"],
+                            "output": result["output"],
+                            "details": result["details"]
+                        })
+
+                    except Exception as e:
+                        logger.error(
+                            f"Code execution error for {user_id}: {e}"
+                        )
+
+                        await websocket.send_json({
+                            "type": "code_result",
+                            "room_id": room_id,
+                            "success": False,
+                            "error": str(e),
+                            "output": "Execution failed"
+                        })
+                
 
                 elif msg_type == "ping":
                     await websocket.send_json({"type": "pong"})
