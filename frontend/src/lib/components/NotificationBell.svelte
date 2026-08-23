@@ -14,16 +14,29 @@
         data: { session }
       } = await supabase.auth.getSession();
 
-      const token = session?.access_token;
+      // Do not call protected API if user is not logged in
+      if (!session) {
+        unreadCount = 0;
+        return;
+      }
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/notifications/unread-count`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${session.access_token}`
           }
         }
       );
+
+      if (!res.ok) {
+        console.error(
+          "Failed to load unread count:",
+          res.status
+        );
+        unreadCount = 0;
+        return;
+      }
 
       const data = await res.json();
 
@@ -36,28 +49,39 @@
 
   async function loadNotifications() {
     try {
-
       const {
         data: { session }
       } = await supabase.auth.getSession();
 
-      const token = session?.access_token;
+      // Do not call protected API if user is not logged in
+      if (!session) {
+        notifications = [];
+        return;
+      }
 
       const res = await fetch(
         `${import.meta.env.VITE_API_URL}/notifications/`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${session.access_token}`
           }
         }
       );
 
+      if (!res.ok) {
+        console.error(
+          "Failed to load notifications:",
+          res.status
+        );
+        notifications = [];
+        return;
+      }
+
       notifications = await res.json();
 
     } catch (err) {
-
       console.error(err);
-
+      notifications = [];
     }
   }
 
@@ -78,8 +102,6 @@
     return () => clearInterval(interval);
 
   });
-
-
 </script>
 
 <div
