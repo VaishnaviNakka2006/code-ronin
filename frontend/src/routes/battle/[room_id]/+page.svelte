@@ -49,121 +49,133 @@
     let unsubscribe: (() => void) | undefined;
 
     async function initializeBattle() {
-      const session = await supabase.auth.getSession();
-      myUserId = session.data.session?.user?.id || '';
+      try {
+        const session = await supabase.auth.getSession();
+        myUserId = session.data.session?.user?.id || '';
 
-      await fetchRoom();
+        // Fetch room information
+        await fetchRoom();
 
-      // Listen for WebSocket events
-      unsubscribe = battleWS.onMessage((event) => {
-
-        // ================================
-        // CODE RESULT
-        // ================================
-        if (
-          event.type === 'code_result' &&
-          event.room_id === roomId
-        ) {
-          isSubmitting = false;
-          codeResult = event;
+        if (!roomInfo) {
+          return;
         }
 
-        // ================================
-        // ERROR
-        // ================================
-        if (event.type === 'error') {
-          isSubmitting = false;
-          error = event.message || 'Battle error';
-        }
+        // Register WebSocket listener FIRST
+        unsubscribe = battleWS.onMessage((event) => {
+          console.log('BATTLE ROOM EVENT:', event);
 
-        // ================================
-        // ROOM STATE
-        // ================================
-        if (
-          event.type === 'room_state' &&
-          event.room_id === roomId
-        ) {
-          roomStatus = event.status;
-
+          // ================================
+          // CODE RESULT
+          // ================================
           if (
-            event.status !== 'active' &&
-            event.status !== 'finished'
+            event.type === 'code_result' &&
+            event.room_id === roomId
           ) {
-            battleStarted = false;
-            problemData = null;
-            timerSeconds = null;
+            isSubmitting = false;
+            codeResult = event;
           }
 
-          if (event.player1_id === myUserId) {
-            myReady = event.player1_ready;
-            opponentReady = event.player2_ready;
-          } else if (event.player2_id === myUserId) {
-            myReady = event.player2_ready;
-            opponentReady = event.player1_ready;
+          // ================================
+          // ERROR
+          // ================================
+          if (event.type === 'error') {
+            isSubmitting = false;
+            error = event.message || 'Battle error';
           }
-        }
 
-        // ================================
-        // COUNTDOWN
-        // ================================
-        if (
-          event.type === 'countdown_update' &&
-          event.room_id === roomId
-        ) {
-          countdown = event.countdown;
-        }
+          // ================================
+          // ROOM STATE
+          // ================================
+          if (
+            event.type === 'room_state' &&
+            event.room_id === roomId
+          ) {
+            console.log('ROOM STATE:', event);
 
-        // ================================
-        // BATTLE START
-        // ================================
-        if (
-          event.type === 'battle_start' &&
-          event.room_id === roomId
-        ) {
-          battleStarted = true;
-          countdown = null;
-          roomStatus = 'active';
+            roomStatus = event.status;
 
-          problemData = event.problem;
+            if (
+              event.player1_id === myUserId
+            ) {
+              myReady = event.player1_ready;
+              opponentReady = event.player2_ready;
+            } else if (
+              event.player2_id === myUserId
+            ) {
+              myReady = event.player2_ready;
+              opponentReady = event.player1_ready;
+            }
+          }
 
-          code = event.problem.starter_code || '';
+          // ================================
+          // COUNTDOWN
+          // ================================
+          if (
+            event.type === 'countdown_update' &&
+            event.room_id === roomId
+          ) {
+            console.log('COUNTDOWN:', event.countdown);
 
-          codeEditorKey += 1;
+            countdown = event.countdown;
+            roomStatus = 'countdown';
+          }
 
-          codeResult = null;
-          isSubmitting = false;
-        }
+          // ================================
+          // BATTLE START
+          // ================================
+          if (
+            event.type === 'battle_start' &&
+            event.room_id === roomId
+          ) {
+            console.log('BATTLE START:', event);
 
-        // ================================
-        // TIMER UPDATE
-        // ================================
-        if (
-          event.type === 'timer_update' &&
-          event.room_id === roomId
-        ) {
-          timerSeconds = event.seconds;
-        }
+            battleStarted = true;
+            countdown = null;
+            roomStatus = 'active';
 
-        // ================================
-        // TIMER END
-        // ================================
-        if (
-          event.type === 'timer_end' &&
-          event.room_id === roomId
-        ) {
-          timerSeconds = 0;
-        }
+            problemData = event.problem;
+            code = event.problem?.starter_code || '';
+
+            // Force CodeEditor to refresh
+            codeEditorKey += 1;
+
+            codeResult = null;
+            isSubmitting = false;
+          }
+
+          // ================================
+          // TIMER UPDATE
+          // ================================
+          if (
+            event.type === 'timer_update' &&
+            event.room_id === roomId
+          ) {
+            timerSeconds = event.seconds;
+          }
+
+          // ================================
+          // TIMER END
+          // ================================
+          if (
+            event.type === 'timer_end' &&
+            event.room_id === roomId
+          ) {
+            timerSeconds = 0;
+            roomStatus = 'finished';
+          }
+        });
+
+        // Connect WebSocket AFTER listener is registered
+        await battleWS.connect();
+
+        console.log('Joining battle room:', roomId);
+
+        // Join the room
+        battleWS.joinRoom(roomId);
+      } catch (err: any) {
+        console.error('Battle initialization failed:', err);
+        error = 'Failed to connect to battle server.';
       }
-
-      // Connect WebSocket and join room
-      await battleWS.connect();
-
-      battleWS.joinRoom(roomId);
-
-      // Give the server a moment to register the room
-      await new Promise((resolve) => setTimeout(resolve, 200));
-
-      );
     }
 
     initializeBattle();
@@ -174,7 +186,10 @@
   });
 
   function toggleReady() {
-    if (roomStatus === 'waiting' || roomStatus === 'ready') {
+    if (
+      roomStatus === 'waiting' ||
+      roomStatus === 'ready'
+    ) {
       if (myReady) {
         battleWS.notReady();
       } else {
@@ -187,7 +202,9 @@
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
 
-    return `${minutes.toString().padStart(2, '0')}:${secs
+    return `${minutes
+      .toString()
+      .padStart(2, '0')}:${secs
       .toString()
       .padStart(2, '0')}`;
   }
@@ -239,7 +256,7 @@
           <span>
             Status:
             <span
-              class="font-mono {roomStatus === 'ready'
+              class="font-mono {roomStatus === 'active'
                 ? 'text-green-400'
                 : 'text-yellow-400'}"
             >
@@ -354,7 +371,9 @@
 
         <!-- Countdown -->
         {#if countdown !== null && !battleStarted}
+
           <div class="text-center py-8">
+
             <p
               class="text-8xl font-mono text-neon-cyan glow-text animate-pulse"
             >
@@ -364,7 +383,9 @@
             <p class="text-sm text-gray-400 mt-2">
               Get ready!
             </p>
+
           </div>
+
         {/if}
 
         <!-- Ready Button -->
@@ -374,7 +395,10 @@
 
             <button
               on:click={toggleReady}
-              disabled={roomStatus !== 'waiting' && roomStatus !== 'ready'}
+              disabled={
+                roomStatus !== 'waiting' &&
+                roomStatus !== 'ready'
+              }
               class="px-6 py-3 bg-neon-cyan text-black font-bold rounded-lg hover:shadow-[0_0_20px_#00f3ff] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {myReady ? 'NOT READY' : 'READY'}
@@ -392,7 +416,7 @@
 
               {:else}
 
-                Battle already in progress.
+                Waiting for battle to begin...
 
               {/if}
 
@@ -407,21 +431,18 @@
             class="mt-6 p-4 bg-black/60 rounded-lg border border-neon-cyan"
           >
 
-            <!-- Problem Title -->
             <h2
               class="text-2xl font-mono text-neon-cyan glow-text"
             >
               {problemData.title}
             </h2>
 
-            <!-- Problem Description -->
             <p
               class="text-gray-300 mt-2 whitespace-pre-wrap"
             >
               {problemData.description}
             </p>
 
-            <!-- Starter Code -->
             <div class="mt-4">
 
               <p class="text-sm text-gray-400">
@@ -451,7 +472,7 @@
 
             </div>
 
-            <!-- Run Code Button -->
+            <!-- Run Code -->
             <div class="mt-4">
 
               <button
@@ -510,7 +531,7 @@
 
           </div>
 
-        <!-- Battle started but no problem yet -->
+        <!-- Battle started but problem not received -->
         {:else if battleStarted}
 
           <div
