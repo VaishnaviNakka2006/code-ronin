@@ -70,7 +70,10 @@
         unsubscribeMessage = battleWS.onMessage((event) => {
           console.log('LOBBY EVENT:', event);
 
-          if (event.type === 'battle_found') {
+          if (
+            event.type === 'battle_found' ||
+            event.type === 'room_joined'
+          ) {
             console.log('MATCH FOUND:', event);
 
             goto(`/battle/${event.room_id}`);
