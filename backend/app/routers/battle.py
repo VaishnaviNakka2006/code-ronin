@@ -313,18 +313,27 @@ async def start_countdown(room_id: str):
 
 
 async def start_battle_timer(room_id: str):
-    """Run a 15‑minute battle timer, sending updates every second."""
+    """Run a 15-minute battle timer."""
+
     async with room_lock:
         room = rooms.get(room_id)
+
         if not room:
             return
-        # Cancel any existing timer task
+
         if room.get("timer_task") and not room["timer_task"].done():
             room["timer_task"].cancel()
-        room["time_remaining"] = 900  # 15 minutes
-        room["timer_task"] = asyncio.create_task(_tick_timer(room_id))
-        # Send initial timer update immediately
-        await send_timer_update(room_id, room["time_remaining"])
+
+        room["time_remaining"] = 900
+
+        room["timer_task"] = asyncio.create_task(
+            _tick_timer(room_id)
+        )
+
+        initial_time = room["time_remaining"]
+
+    # IMPORTANT: send outside the lock
+    await send_timer_update(room_id, initial_time)
 
 async def _tick_timer(room_id: str):
     """Internal function that ticks the timer every second."""
@@ -498,6 +507,9 @@ async def websocket_battle(websocket: WebSocket, token: str):
                                     "timer_task": None,
                                     "timer_remaining":900,
                                 }
+
+                                user_room[p1] = room_id
+                                user_room[p2] = room_id
 
                 
                            
