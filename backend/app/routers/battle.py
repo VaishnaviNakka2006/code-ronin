@@ -528,11 +528,23 @@ async def websocket_battle(websocket: WebSocket, token: str):
                             logger.info(f"Match found: {p1_name} vs {p2_name} in room {room_id}")
 
                 elif msg_type == "leave_queue":
+                    print("=" * 60)
+                    print("LEAVE_QUEUE RECEIVED")
+                    print("USER:", username)
+                    print("USER ID:", user_id)
+                    print("PID:", os.getpid())
+                    print("DATA:", data)
+                    print("=" * 60)
+
                     async with queue_lock:
                         for diff in queues:
                             if user_id in queues[diff]:
                                 queues[diff].remove(user_id)
-                    await websocket.send_json({"type": "queue_left"})
+
+                    await websocket.send_json({
+                        "type": "queue_left"
+                    })
+
                     logger.info(f"{username} left queue")
 
                 # ---------- Battle room commands ----------

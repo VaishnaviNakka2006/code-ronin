@@ -180,17 +180,29 @@ class BattleWebSocketService {
   }
 
   private onClose(event: CloseEvent): void {
-    console.log(`Battle WebSocket closed: ${event.code} ${event.reason}`);
+    console.log(
+      'Battle WebSocket closed:',
+      event.code,
+      event.reason,
+      'wasClean:',
+      event.wasClean
+    );
+
     this.isConnected = false;
     this.ws = null;
-    this.status.set('disconnected');
 
-    // Attempt reconnect if not closed by user (code 1000) and not max attempts
-    if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
+    console.log('Current reconnect attempts:', this.reconnectAttempts);
+
+    if (
+      event.code !== 1000 &&
+      this.reconnectAttempts < this.maxReconnectAttempts
+    ) {
+      console.log('Unexpected WebSocket close. Reconnecting...');
+      this.status.set('connecting');
       this.scheduleReconnect();
     } else {
+      console.log('WebSocket permanently disconnected');
       this.status.set('disconnected');
-      this.resetStores();
     }
   }
 
