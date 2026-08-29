@@ -8,6 +8,7 @@
   let isInQueue = false;
 
   let unsubscribeStatus: (() => void) | null = null;
+  let unsubscribeMessage: (() => void) | null = null;
 
   function updateStatus(status: string) {
     switch (status) {
@@ -36,44 +37,70 @@
     }
   }
 
-  onMount(async () => {
-    await battleWS.connect();
-
-    unsubscribeStatus = battleWS.status.subscribe((status) => {
-      updateStatus(status);
-
-      isInQueue = status === 'in_queue';
-    });
-
-    battleWS.onMessage((event) => {
-
-        console.log("LOBBY EVENT:", event);
-
-        if (event.type === "battle_found") {
-
-            console.log("MATCH FOUND");
-
-            console.log(event);
-
-            goto(`/battle/${event.room_id}`);
-        }
-
-    });
-
-    return () => {
-      if (unsubscribeStatus) {
-      unsubscribeStatus();
-    }
-  };
-  });
-
   function findMatch() {
-    battleWS.joinQueue(difficulty);
+    console.log('FIND MATCH BUTTON CLICKED');
+    console.log('Selected difficulty:', difficulty);
+
+    try {
+      battleWS.joinQueue(difficulty);
+      console.log('joinQueue message sent');
+    } catch (err) {
+      console.error('Find match failed:', err);
+      statusText = 'Failed to join matchmaking queue.';
+    }
   }
 
   function cancelSearch() {
     battleWS.leaveQueue();
   }
+
+  onMount(() => {
+    async function setup() {
+      try {
+        await battleWS.connect();
+
+        unsubscribeStatus = battleWS.status.subscribe((status) => {
+          console.log('Battle status:', status);
+
+          updateStatus(status);
+
+          isInQueue = status === 'in_queue';
+        });
+
+        unsubscribeMessage = battleWS.onMessage((event) => {
+          console.log('LOBBY EVENT:', event);
+
+          if (event.type === 'battle_found') {
+            console.log('MATCH FOUND:', event);
+
+            goto(`/battle/${event.room_id}`);
+          }
+
+          if (event.type === 'error') {
+            console.error('Battle error:', event.message);
+
+            statusText = event.message || 'Battle error.';
+            isInQueue = false;
+          }
+        });
+      } catch (err) {
+        console.error('Battle WebSocket connection failed:', err);
+        statusText = 'Failed to connect to battle server.';
+      }
+    }
+
+    setup();
+
+    return () => {
+      if (unsubscribeStatus) {
+        unsubscribeStatus();
+      }
+
+      if (unsubscribeMessage) {
+        unsubscribeMessage();
+      }
+    };
+  });
 </script>
 
 <div class="min-h-screen bg-neon-dark p-8">
@@ -106,7 +133,7 @@
         {#if !isInQueue}
           <button
             on:click={findMatch}
-            class="flex-1 px-4 py-2 rounded bg-neon-cyan text-black font-bold hover:shadow-[0_0_20px_#00f3ff]"
+            class="flex-1 px-4 py-2 rounded bg-neon-cyan text-black font-bold hover:shadow-[0_0_20px_#00f3ff] transition"
           >
             FIND MATCH
           </button>
