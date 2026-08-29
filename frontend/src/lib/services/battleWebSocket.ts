@@ -126,6 +126,12 @@ class BattleWebSocketService {
       code
     });
   }
+  submitFinal(code: string): void {
+    this.send({
+      type: 'submit_final',
+      code
+    });
+  }
   notReady(): void {
     this.send({ type: 'not_ready' });
   }

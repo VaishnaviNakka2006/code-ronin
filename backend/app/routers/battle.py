@@ -1,80 +1,144 @@
 import asyncio
+import hashlib
 import json
-import uuid
-import os
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
-from app.deps import get_current_user
-from app.db import supabase
 import logging
 import traceback
-from app.services.mission_engine import MissionEngine
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+
+from app.db import supabase
+
 
 logger = logging.getLogger(__name__)
 
-# ---------- Problem pool ----------
+router = APIRouter(prefix="/battle", tags=["battle"])
+
+
+# ============================================================
+# PROBLEM POOL
+# ============================================================
+
 PROBLEMS = {
     "easy": [
         {
             "title": "Sum of Two Numbers",
-            "description": "Write a function `add(a, b)` that returns the sum of two integers.",
-            "starter_code": "def add(a, b):\n    # Your code here\n    pass",
+            "description": (
+                "Write a function `add(a, b)` that returns "
+                "the sum of two integers."
+            ),
+            "starter_code": (
+                "def add(a, b):\n"
+                "    # Your code here\n"
+                "    pass"
+            ),
             "test_cases": [
-                {"input": "add(2,3)", "expected": "5"},
-                {"input": "add(-1,1)", "expected": "0"}
-            ]
+                {"input": "add(2, 3)", "expected": "5"},
+                {"input": "add(-1, 1)", "expected": "0"},
+            ],
         },
         {
             "title": "Even or Odd",
-            "description": "Write a function `is_even(n)` that returns True if n is even, else False.",
-            "starter_code": "def is_even(n):\n    # Your code here\n    pass",
+            "description": (
+                "Write a function `is_even(n)` that returns "
+                "True if n is even, otherwise False."
+            ),
+            "starter_code": (
+                "def is_even(n):\n"
+                "    # Your code here\n"
+                "    pass"
+            ),
             "test_cases": [
                 {"input": "is_even(4)", "expected": "True"},
-                {"input": "is_even(7)", "expected": "False"}
-            ]
-        }
+                {"input": "is_even(7)", "expected": "False"},
+            ],
+        },
     ],
     "medium": [
         {
             "title": "Factorial",
-            "description": "Write a function `factorial(n)` that returns n! (n factorial).",
-            "starter_code": "def factorial(n):\n    # Your code here\n    pass",
+            "description": (
+                "Write a function `factorial(n)` that returns n factorial."
+            ),
+            "starter_code": (
+                "def factorial(n):\n"
+                "    # Your code here\n"
+                "    pass"
+            ),
             "test_cases": [
                 {"input": "factorial(5)", "expected": "120"},
-                {"input": "factorial(0)", "expected": "1"}
-            ]
+                {"input": "factorial(0)", "expected": "1"},
+            ],
         }
     ],
     "hard": [
         {
             "title": "Fibonacci",
-            "description": "Write a function `fib(n)` that returns the nth Fibonacci number.",
-            "starter_code": "def fib(n):\n    # Your code here\n    pass",
+            "description": (
+                "Write a function `fib(n)` that returns "
+                "the nth Fibonacci number."
+            ),
+            "starter_code": (
+                "def fib(n):\n"
+                "    # Your code here\n"
+                "    pass"
+            ),
             "test_cases": [
                 {"input": "fib(6)", "expected": "8"},
-                {"input": "fib(1)", "expected": "1"}
-            ]
+                {"input": "fib(1)", "expected": "1"},
+            ],
         }
-    ]
+    ],
 }
 
+
+# ============================================================
+# IN-MEMORY STATE
+# ============================================================
+
+active_connections: dict[str, WebSocket] = {}
+
+queues: dict[str, list[str]] = {
+    "easy": [],
+    "medium": [],
+    "hard": [],
+}
+
+rooms: dict[str, dict] = {}
+
+user_room: dict[str, str] = {}
+
+queue_lock = asyncio.Lock()
+room_lock = asyncio.Lock()
+
+
+# ============================================================
+# PROBLEM HELPERS
+# ============================================================
+
 def get_problem_for_difficulty(difficulty: str, seed: str) -> dict:
-    import hashlib
-
     problems = PROBLEMS.get(difficulty, PROBLEMS["easy"])
-    idx = int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(problems)
-    return problems[idx]
 
-def _convert_test_cases(test_cases):
-    """Convert battle test cases for MissionEngine."""
-    return [
-        {
-            "input": tc.get("input", ""),
-            "expected_output": tc.get("expected", ""),
-        }
-        for tc in test_cases
-    ]
+    index = (
+        int(hashlib.md5(seed.encode()).hexdigest(), 16)
+        % len(problems)
+    )
 
-def run_battle_tests(test_cases, user_code):
+    return problems[index]
+
+
+# ============================================================
+# CODE EXECUTION
+# ============================================================
+
+def run_battle_tests(test_cases: list, user_code: str) -> dict:
+    """
+    Execute submitted Python code against battle test cases.
+
+    MVP implementation.
+    """
+
     passed = 0
     total = len(test_cases)
     details = []
@@ -82,189 +146,232 @@ def run_battle_tests(test_cases, user_code):
     namespace = {}
 
     try:
+        # Same namespace is important for recursive functions.
         exec(user_code, namespace, namespace)
 
-    except Exception as e:
+    except Exception as exc:
         return {
             "success": False,
-            "score": 0,
+            "score": 0.0,
             "tests_passed": 0,
             "total_tests": total,
-            "output": f"Code error: {str(e)}",
-            "details": []
+            "output": f"Code error: {str(exc)}",
+            "details": [],
         }
 
-    for index, tc in enumerate(test_cases):
-
-        test_input = tc.get("input", "")
-        expected = str(tc.get("expected", "")).strip()
+    for index, test_case in enumerate(test_cases):
+        test_input = test_case.get("input", "")
+        expected = str(
+            test_case.get("expected", "")
+        ).strip()
 
         try:
             actual_result = eval(
                 test_input,
                 namespace,
-                namespace
+                namespace,
             )
 
             actual = str(actual_result).strip()
 
             is_pass = actual == expected
 
-        except Exception as e:
-
-            actual = str(e)
-
+        except Exception as exc:
+            actual = str(exc)
             is_pass = False
 
         if is_pass:
             passed += 1
 
-        details.append({
-            "test_id": index + 1,
-            "passed": is_pass,
-            "expected": expected,
-            "actual": actual
-        })
+        details.append(
+            {
+                "test_id": index + 1,
+                "passed": is_pass,
+                "expected": expected,
+                "actual": actual,
+            }
+        )
 
-    score = passed / total if total > 0 else 0
+    score = passed / total if total > 0 else 0.0
+
+    output_lines = []
+
+    for detail in details:
+        symbol = "✓" if detail["passed"] else "✗"
+
+        output_lines.append(
+            f"{symbol} Test {detail['test_id']}: "
+            f"expected '{detail['expected']}', "
+            f"got '{detail['actual']}'"
+        )
 
     return {
         "success": passed == total,
         "score": score,
         "tests_passed": passed,
         "total_tests": total,
-        "output": "\n".join(
-            [
-                f"{'✓' if d['passed'] else '✗'} "
-                f"Test {d['test_id']}: "
-                f"expected '{d['expected']}', "
-                f"got '{d['actual']}'"
-                for d in details
-            ]
-        ),
-        "details": details
+        "output": "\n".join(output_lines),
+        "details": details,
     }
 
-router = APIRouter(prefix="/battle", tags=["battle"])
 
-# ---------- In‑memory state ----------
-active_connections: dict[str, WebSocket] = {}
-queues: dict[str, list[str]] = {
-    "easy": [],
-    "medium": [],
-    "hard": []
-}
-rooms: dict[str, dict] = {}
-# Track which room each user is currently in (for broadcasting)
-user_room: dict[str, str] = {}
+# ============================================================
+# AUTH HELPERS
+# ============================================================
 
-# Locks for thread safety
-queue_lock = asyncio.Lock()
-room_lock = asyncio.Lock()
-
-
-# ---------- Helper functions ----------
 async def get_user_from_token(token: str):
-    """Validate JWT and return user dict using the existing Supabase client."""
+    """
+    Validate Supabase JWT and return the user.
+    """
+
     try:
-        user = supabase.auth.get_user(token)
-        return user.user
-    except Exception as e:
-        logger.error(f"Auth error: {e}")
+        response = supabase.auth.get_user(token)
+
+        return response.user
+
+    except Exception as exc:
+        logger.error(
+            "WebSocket authentication error: %s",
+            exc,
+        )
+
         return None
 
 
-async def send_to_user(user_id: str, message: dict):
-    print("=" * 60)
-    print("SEND_TO_USER")
-    print("TARGET:", user_id)
-    print("CONNECTED USERS:", list(active_connections.keys()))
-    print("MESSAGE:", message)
-    print("=" * 60)
+# ============================================================
+# WEBSOCKET HELPERS
+# ============================================================
 
-    ws = active_connections.get(user_id)
+async def send_to_user(
+    user_id: str,
+    message: dict,
+):
+    websocket = active_connections.get(user_id)
 
-    if ws:
-        try:
-            await ws.send_json(message)
-            print("MESSAGE SENT")
-        except Exception as e:
-            print("SEND ERROR:", e)
-            active_connections.pop(user_id, None)
-    else:
-        print("NO WEBSOCKET FOUND")
+    if websocket is None:
+        return
+
+    try:
+        await websocket.send_json(message)
+
+    except Exception as exc:
+        logger.error(
+            "Failed to send message to user %s: %s",
+            user_id,
+            exc,
+        )
+
+        active_connections.pop(user_id, None)
 
 
 async def send_room_state(room_id: str):
-    """Broadcast the current room state to both players."""
     async with room_lock:
         room = rooms.get(room_id)
+
         if not room:
             return
+
+        player1_id = room["player1_id"]
+        player2_id = room["player2_id"]
+
         state = {
             "type": "room_state",
             "room_id": room_id,
             "status": room["status"],
-            "player1_id": room["player1_id"],
-            "player1_ready": room.get("player1_ready", False),
-            "player2_id": room["player2_id"],
-            "player2_ready": room.get("player2_ready", False),
-            "difficulty": room["difficulty"]
+            "player1_id": player1_id,
+            "player1_ready": room.get(
+                "player1_ready",
+                False,
+            ),
+            "player2_id": player2_id,
+            "player2_ready": room.get(
+                "player2_ready",
+                False,
+            ),
+            "difficulty": room["difficulty"],
         }
-    # Send to both players
-    await send_to_user(room["player1_id"], state)
-    await send_to_user(room["player2_id"], state)
 
-async def send_countdown_update(room_id: str, countdown: int):
-    """Send countdown to both players."""
+    await send_to_user(player1_id, state)
+    await send_to_user(player2_id, state)
 
+
+async def send_countdown_update(
+    room_id: str,
+    countdown: int,
+):
     async with room_lock:
         room = rooms.get(room_id)
 
         if not room:
             return
 
-    await send_to_user(
-        room["player1_id"],
-        {
-            "type": "countdown_update",
-            "room_id": room_id,
-            "countdown": countdown
-        }
-    )
+        player1_id = room["player1_id"]
+        player2_id = room["player2_id"]
 
-    await send_to_user(
-        room["player2_id"],
-        {
-            "type": "countdown_update",
-            "room_id": room_id,
-            "countdown": countdown
-        }
-    )
+    event = {
+        "type": "countdown_update",
+        "room_id": room_id,
+        "countdown": countdown,
+    }
+
+    await send_to_user(player1_id, event)
+    await send_to_user(player2_id, event)
+
+
+async def send_timer_update(
+    room_id: str,
+    seconds: int,
+):
+    async with room_lock:
+        room = rooms.get(room_id)
+
+        if not room:
+            return
+
+        player1_id = room["player1_id"]
+        player2_id = room["player2_id"]
+
+    event = {
+        "type": "timer_update",
+        "room_id": room_id,
+        "seconds": seconds,
+    }
+
+    await send_to_user(player1_id, event)
+    await send_to_user(player2_id, event)
+
+
+# ============================================================
+# COUNTDOWN
+# ============================================================
 
 async def start_countdown(room_id: str):
-
     try:
-
         async with room_lock:
-
             room = rooms.get(room_id)
 
             if not room:
+                return
+
+            if room["status"] not in (
+                "waiting",
+                "ready",
+            ):
                 return
 
             room["status"] = "countdown"
 
         await send_room_state(room_id)
 
-        for i in [3, 2, 1]:
-
-            await send_countdown_update(room_id, i)
+        for number in [3, 2, 1]:
+            await send_countdown_update(
+                room_id,
+                number,
+            )
 
             await asyncio.sleep(1)
 
         async with room_lock:
-
             room = rooms.get(room_id)
 
             if not room:
@@ -274,29 +381,35 @@ async def start_countdown(room_id: str):
 
             problem = get_problem_for_difficulty(
                 difficulty,
-                room_id
+                room_id,
             )
 
             room["problem"] = problem
             room["status"] = "active"
+
+            room["started_at"] = (
+                datetime.now(timezone.utc).isoformat()
+            )
+
             room["countdown_task"] = None
 
+            player1_id = room["player1_id"]
+            player2_id = room["player2_id"]
+
+        battle_start_event = {
+            "type": "battle_start",
+            "room_id": room_id,
+            "problem": problem,
+        }
+
         await send_to_user(
-            room["player1_id"],
-            {
-                "type": "battle_start",
-                "room_id": room_id,
-                "problem": problem
-            }
+            player1_id,
+            battle_start_event,
         )
 
         await send_to_user(
-            room["player2_id"],
-            {
-                "type": "battle_start",
-                "room_id": room_id,
-                "problem": problem
-            }
+            player2_id,
+            battle_start_event,
         )
 
         await start_battle_timer(room_id)
@@ -304,544 +417,1373 @@ async def start_countdown(room_id: str):
         await send_room_state(room_id)
 
         logger.info(
-            f"Battle started in room {room_id} with problem: {problem['title']}"
+            "Battle started in room %s",
+            room_id,
         )
 
     except asyncio.CancelledError:
+        logger.info(
+            "Countdown cancelled for room %s",
+            room_id,
+        )
 
-        logger.info(f"Countdown cancelled for {room_id}")
 
+# ============================================================
+# TIMER
+# ============================================================
 
 async def start_battle_timer(room_id: str):
-    """Run a 15-minute battle timer."""
-
     async with room_lock:
         room = rooms.get(room_id)
 
         if not room:
             return
 
-        if room.get("timer_task") and not room["timer_task"].done():
-            room["timer_task"].cancel()
+        existing_task = room.get("timer_task")
+
+        if (
+            existing_task is not None
+            and not existing_task.done()
+        ):
+            existing_task.cancel()
 
         room["time_remaining"] = 900
 
         room["timer_task"] = asyncio.create_task(
-            _tick_timer(room_id)
+            tick_timer(room_id)
         )
 
-        initial_time = room["time_remaining"]
+    await send_timer_update(
+        room_id,
+        900,
+    )
 
-    # IMPORTANT: send outside the lock
-    await send_timer_update(room_id, initial_time)
 
-async def _tick_timer(room_id: str):
-    """Internal function that ticks the timer every second."""
-    while True:
-        await asyncio.sleep(1)
-        async with room_lock:
-            room = rooms.get(room_id)
-            if not room:
+async def tick_timer(room_id: str):
+    try:
+        while True:
+            await asyncio.sleep(1)
+
+            async with room_lock:
+                room = rooms.get(room_id)
+
+                if not room:
+                    return
+
+                if room.get("status") != "active":
+                    return
+
+                remaining = max(
+                    0,
+                    room.get("time_remaining", 0) - 1,
+                )
+
+                room["time_remaining"] = remaining
+
+            await send_timer_update(
+                room_id,
+                remaining,
+            )
+
+            if remaining <= 0:
+                await on_timer_end(room_id)
                 return
-            if "time_remaining" not in room:
-                return
-            room["time_remaining"] -= 1
-            remaining = room["time_remaining"]
-        # Broadcast update
-        await send_timer_update(room_id, remaining)
-        if remaining <= 0:
-            # Timer ended
-            await on_timer_end(room_id)
-            return
 
-async def send_timer_update(room_id: str, seconds: int):
-    """Send a timer_update event to both players."""
+    except asyncio.CancelledError:
+        logger.info(
+            "Timer cancelled for room %s",
+            room_id,
+        )
+
+
+# ============================================================
+# BATTLE FINALIZATION
+# ============================================================
+
+async def finalize_battle(room_id: str):
+    """
+    Finalize the battle exactly once.
+
+    Winner rules:
+    1. Higher score wins.
+    2. If scores are equal, faster final submission wins.
+    3. If both are equal, battle is a draw.
+    """
+
     async with room_lock:
         room = rooms.get(room_id)
+
         if not room:
             return
-    await send_to_user(room["player1_id"], {"type": "timer_update", "seconds": seconds, "room_id": room_id})
-    await send_to_user(room["player2_id"], {"type": "timer_update", "seconds": seconds, "room_id": room_id})
+
+        if room.get("finalized"):
+            return
+
+        room["finalized"] = True
+
+        room["status"] = "finished"
+
+        player1_id = room["player1_id"]
+        player2_id = room["player2_id"]
+
+        player1_score = room.get(
+            "player1_final_score",
+            0.0,
+        )
+
+        player2_score = room.get(
+            "player2_final_score",
+            0.0,
+        )
+
+        player1_time = room.get(
+            "player1_final_time"
+        )
+
+        player2_time = room.get(
+            "player2_final_time"
+        )
+
+        difficulty = room.get("difficulty")
+        problem = room.get("problem")
+        started_at = room.get("started_at")
+
+        winner_id = None
+
+        # Higher score wins.
+        if player1_score > player2_score:
+            winner_id = player1_id
+
+        elif player2_score > player1_score:
+            winner_id = player2_id
+
+        # Equal score: faster submission wins.
+        else:
+            if (
+                player1_time is not None
+                and player2_time is not None
+            ):
+                if player1_time < player2_time:
+                    winner_id = player1_id
+
+                elif player2_time < player1_time:
+                    winner_id = player2_id
+
+            elif (
+                player1_time is not None
+                and player2_time is None
+            ):
+                winner_id = player1_id
+
+            elif (
+                player2_time is not None
+                and player1_time is None
+            ):
+                winner_id = player2_id
+
+        result_event = {
+            "type": "battle_finished",
+            "room_id": room_id,
+            "winner_id": winner_id,
+            "player1_id": player1_id,
+            "player2_id": player2_id,
+            "player1_score": player1_score,
+            "player2_score": player2_score,
+            "player1_time": player1_time,
+            "player2_time": player2_time,
+            "draw": winner_id is None,
+            "difficulty": difficulty,
+            "problem_title": (
+                problem.get("title")
+                if problem
+                else None
+            ),
+        }
+
+    # --------------------------------------------------------
+    # DATABASE PERSISTENCE
+    # Do not hold room_lock during database work.
+    # --------------------------------------------------------
+
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+
+        supabase.table("battles").insert(
+            {
+                "room_id": room_id,
+                "player1_id": player1_id,
+                "player2_id": player2_id,
+                "winner_id": winner_id,
+                "difficulty": difficulty,
+                "problem": problem,
+                "player1_score": player1_score,
+                "player2_score": player2_score,
+                "player1_completion_time": (
+                    player1_time
+                ),
+                "player2_completion_time": (
+                    player2_time
+                ),
+                "status": "finished",
+                "started_at": started_at,
+                "finished_at": now,
+            }
+        ).execute()
+
+    except Exception as exc:
+        logger.error(
+            "Failed to save battle %s: %s",
+            room_id,
+            exc,
+        )
+
+    # --------------------------------------------------------
+    # BROADCAST RESULT
+    # --------------------------------------------------------
+
+    await send_to_user(
+        player1_id,
+        result_event,
+    )
+
+    await send_to_user(
+        player2_id,
+        result_event,
+    )
+
+    await send_room_state(room_id)
+
+    logger.info(
+        "Battle %s finalized. Winner: %s",
+        room_id,
+        winner_id,
+    )
+
 
 async def on_timer_end(room_id: str):
-    """Handle timer expiration – broadcast event and update room status."""
+    """
+    Handle timer expiration.
+    """
+
     async with room_lock:
         room = rooms.get(room_id)
+
         if not room:
             return
-        # Set status to 'finished' (we'll use this later for winner detection)
-        room["status"] = "finished"
-        if room.get("timer_task"):
-            room["timer_task"] = None
-    # Broadcast timer_end event
-    await send_to_user(room["player1_id"], {"type": "timer_end", "room_id": room_id})
-    await send_to_user(room["player2_id"], {"type": "timer_end", "room_id": room_id})
-    logger.info(f"Timer ended in room {room_id}")
+
+        if room.get("finalized"):
+            return
+
+        player1_id = room["player1_id"]
+        player2_id = room["player2_id"]
+
+        room["time_remaining"] = 0
+        room["timer_task"] = None
+
+    timer_end_event = {
+        "type": "timer_end",
+        "room_id": room_id,
+    }
+
+    await send_to_user(
+        player1_id,
+        timer_end_event,
+    )
+
+    await send_to_user(
+        player2_id,
+        timer_end_event,
+    )
+
+    await finalize_battle(room_id)
 
 
+# ============================================================
+# REST ENDPOINTS
+# ============================================================
 
-
-# ---------- REST endpoints ----------
 @router.get("/room/{room_id}")
 async def get_room_info(room_id: str):
-    import os
-
-    print("=" * 60)
-    print("PID:", os.getpid())
-    print("GET ROOM:", room_id)
-    print("ROOMS:", list(rooms.keys()))
-    print("=" * 60)
-    """Get basic room info for the battle page."""
     async with room_lock:
         room = rooms.get(room_id)
+
         if not room:
-            raise HTTPException(404, "Room not found")
-    # Fetch usernames
-    p1 = supabase.table("profiles").select("username").eq("id", room["player1_id"]).execute()
-    p2 = supabase.table("profiles").select("username").eq("id", room["player2_id"]).execute()
+            raise HTTPException(
+                status_code=404,
+                detail="Room not found",
+            )
+
+        player1_id = room["player1_id"]
+        player2_id = room["player2_id"]
+
+        difficulty = room["difficulty"]
+        status = room["status"]
+
+    try:
+        player1_response = (
+            supabase
+            .table("profiles")
+            .select("username")
+            .eq("id", player1_id)
+            .execute()
+        )
+
+        player2_response = (
+            supabase
+            .table("profiles")
+            .select("username")
+            .eq("id", player2_id)
+            .execute()
+        )
+
+        player1_username = (
+            player1_response.data[0]["username"]
+            if player1_response.data
+            else "Player 1"
+        )
+
+        player2_username = (
+            player2_response.data[0]["username"]
+            if player2_response.data
+            else "Player 2"
+        )
+
+    except Exception as exc:
+        logger.error(
+            "Failed to load player names: %s",
+            exc,
+        )
+
+        player1_username = "Player 1"
+        player2_username = "Player 2"
+
     return {
         "room_id": room_id,
-        "player1_id": room["player1_id"],
-        "player1_username": p1.data[0]["username"] if p1.data else "Unknown",
-        "player2_id": room["player2_id"],
-        "player2_username": p2.data[0]["username"] if p2.data else "Unknown",
-        "difficulty": room["difficulty"],
-        "status": room["status"]
+        "player1_id": player1_id,
+        "player1_username": player1_username,
+        "player2_id": player2_id,
+        "player2_username": player2_username,
+        "difficulty": difficulty,
+        "status": status,
     }
 
 
-# ---------- WebSocket endpoint ----------
+# ============================================================
+# WEBSOCKET ENDPOINT
+# ============================================================
+
 @router.websocket("/ws")
-async def websocket_battle(websocket: WebSocket, token: str):
-    """WebSocket endpoint for battle matchmaking and battle room communication."""
-    # Authenticate
+async def websocket_battle(
+    websocket: WebSocket,
+    token: str,
+):
     user = await get_user_from_token(token)
+
     if not user:
-        await websocket.close(code=1008, reason="Invalid token")
+        await websocket.close(
+            code=1008,
+            reason="Invalid token",
+        )
+
         return
-    user_id = user.id
-    username = user.user_metadata.get("username", user.email)
+
+    user_id = str(user.id)
+
+    username = (
+        user.user_metadata.get(
+            "username",
+            user.email or "Player",
+        )
+    )
 
     await websocket.accept()
+
     active_connections[user_id] = websocket
-    # Restore room after reconnect
-    existing_room = user_room.get(user_id)
 
-    if existing_room:
-        await websocket.send_json({
-            "type": "room_joined",
-            "room_id": existing_room
-        })
-
-        await send_room_state(existing_room)
-    logger.info(f"User {username} connected to battle WebSocket")
+    logger.info(
+        "Battle WebSocket connected: %s",
+        username,
+    )
 
     try:
-        await websocket.send_json({"type": "connected", "user_id": user_id})
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "user_id": user_id,
+            }
+        )
+
+        # ----------------------------------------------------
+        # Restore existing room after reconnect
+        # ----------------------------------------------------
+
+        existing_room = user_room.get(user_id)
+
+        if existing_room:
+            async with room_lock:
+                room = rooms.get(existing_room)
+
+            if room:
+                await websocket.send_json(
+                    {
+                        "type": "room_joined",
+                        "room_id": existing_room,
+                    }
+                )
+
+                await send_room_state(
+                    existing_room
+                )
+
+        # ====================================================
+        # MAIN MESSAGE LOOP
+        # ====================================================
 
         while True:
             raw = await websocket.receive_text()
+
             try:
                 data = json.loads(raw)
-                msg_type = data.get("type")
 
-                # ---------- Matchmaking commands ----------
-                if msg_type == "join_queue":
-                    print(f"JOIN_QUEUE: {username} ({user_id})")
-                    difficulty = data.get("difficulty", "easy")
-                    if difficulty not in queues:
-                        await websocket.send_json({"type": "error", "message": "Invalid difficulty"})
-                        continue
-                    async with queue_lock:
-                        print("================================================")
-                        print("BEFORE:", queues)
+            except json.JSONDecodeError:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": "Invalid JSON",
+                    }
+                )
 
-                        for diff in queues:
-                            if user_id in queues[diff]:
-                                queues[diff].remove(user_id)
+                continue
 
-                        queues[difficulty].append(user_id)
+            msg_type = data.get("type")
 
-                        print("AFTER:", queues)
-                        print("QUEUE LENGTH:", len(queues[difficulty]))
+            # =================================================
+            # JOIN QUEUE
+            # =================================================
 
-                        # ADD THESE LINES
-                        print("=" * 60)
-                        print("PID:", os.getpid())
-                        print("QUEUE:", queues[difficulty])
-                        print("QUEUE LENGTH:", len(queues[difficulty]))
-                        print("=" * 60)
+            if msg_type == "join_queue":
+                difficulty = data.get(
+                    "difficulty",
+                    "easy",
+                )
 
-                        print("================================================")
-                    await websocket.send_json({"type": "queue_joined", "difficulty": difficulty})
-                    logger.info(f"{username} joined {difficulty} queue")
-
-                    # Check for match
-                    async with queue_lock:
-                        q = queues[difficulty]
-
-                        print(f"Queue length for {difficulty}: {len(q)}")
-
-                        # ADD THESE LINES
-                        print("=" * 60)
-                        print("PID:", os.getpid())
-                        print("MATCH CHECK")
-                        print("QUEUE:", q)
-                        print("LENGTH:", len(q))
-                        print("=" * 60)
-
-                        if len(q) >= 2:
-                            p1 = q.pop(0)
-                            p2 = q.pop(0)
-                            room_id = str(uuid.uuid4())
-                            async with room_lock:
-                                rooms[room_id] = {
-                                    "player1_id": p1,
-                                    "player2_id": p2,
-                                    "difficulty": difficulty,
-                                    "status": "waiting",
-                                    "player1_ready": False,
-                                    "player2_ready": False,
-                                    "countdown_task": None,
-                                    "problem": None,
-                                    "timer_task": None,
-                                    "timer_remaining":900,
-                                }
-
-                                user_room[p1] = room_id
-                                user_room[p2] = room_id
-
-                
-                           
-
-                                print("=" * 60)
-                                print("PID:", os.getpid())
-                                print("ROOM CREATED:", room_id)
-                                print("ROOMS:", list(rooms.keys()))
-                                print("=" * 60)
-                            # Fetch usernames
-                            p1_user = supabase.table("profiles").select("username").eq("id", p1).execute()
-                            p2_user = supabase.table("profiles").select("username").eq("id", p2).execute()
-                            p1_name = p1_user.data[0]["username"] if p1_user.data else "Player1"
-                            p2_name = p2_user.data[0]["username"] if p2_user.data else "Player2"
-
-                            await send_to_user(p1, {
-                                "type": "battle_found",
-                                "room_id": room_id,
-                                "opponent_username": p2_name,
-                                "difficulty": difficulty
-                            })
-                            await send_to_user(p2, {
-                                "type": "battle_found",
-                                "room_id": room_id,
-                                "opponent_username": p1_name,
-                                "difficulty": difficulty
-                            })
-                            logger.info(f"Match found: {p1_name} vs {p2_name} in room {room_id}")
-
-                elif msg_type == "leave_queue":
-                    print("=" * 60)
-                    print("LEAVE_QUEUE RECEIVED")
-                    print("USER:", username)
-                    print("USER ID:", user_id)
-                    print("PID:", os.getpid())
-                    print("DATA:", data)
-                    print("=" * 60)
-
-                    async with queue_lock:
-                        for diff in queues:
-                            if user_id in queues[diff]:
-                                queues[diff].remove(user_id)
-
-                    await websocket.send_json({
-                        "type": "queue_left"
-                    })
-
-                    logger.info(f"{username} left queue")
-
-                # ---------- Battle room commands ----------
-                elif msg_type == "join_room":
-                    room_id = data.get("room_id")
-                    if not room_id:
-                        await websocket.send_json({"type": "error", "message": "Missing room_id"})
-                        continue
-                    async with room_lock:
-                        room = rooms.get(room_id)
-                        if not room:
-                            await websocket.send_json({"type": "error", "message": "Room not found"})
-                            continue
-                        # Verify user is part of this room
-                        if user_id not in (room["player1_id"], room["player2_id"]):
-                            await websocket.send_json({"type": "error", "message": "You are not in this room"})
-                            continue
-                        # Store room mapping
-                        # Store room mapping
-                        user_room[user_id] = room_id
-
-                        logger.info(f"{username} joined room {room_id}")
-
-                        # Tell this client the join succeeded
-                        await websocket.send_json({
-                            "type": "room_joined",
-                            "room_id": room_id
-                        })
-
-                    # Send current room state
-                    await send_room_state(room_id)
-
-                elif msg_type == "ready":
-                    room_id = user_room.get(user_id)
-
-                    if not room_id:
-                        await websocket.send_json({
+                if difficulty not in queues:
+                    await websocket.send_json(
+                        {
                             "type": "error",
-                            "message": "Not in a room"
-                        })
-                        continue
+                            "message": (
+                                "Invalid difficulty"
+                            ),
+                        }
+                    )
 
-                    async with room_lock:
-                        room = rooms.get(room_id)
+                    continue
 
-                        if not room:
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": "Room not found"
-                            })
+                async with queue_lock:
+                    for queue in queues.values():
+                        if user_id in queue:
+                            queue.remove(user_id)
+
+                    queues[difficulty].append(
+                        user_id
+                    )
+
+                    queue = queues[difficulty]
+
+                    if len(queue) < 2:
+                        matched = False
+
+                    else:
+                        player1_id = queue.pop(0)
+                        player2_id = queue.pop(0)
+
+                        matched = True
+
+                if not matched:
+                    await websocket.send_json(
+                        {
+                            "type": "queue_joined",
+                            "difficulty": difficulty,
+                        }
+                    )
+
+                    continue
+
+                room_id = str(uuid.uuid4())
+
+                async with room_lock:
+                    rooms[room_id] = {
+                        "player1_id": player1_id,
+                        "player2_id": player2_id,
+                        "difficulty": difficulty,
+                        "status": "waiting",
+
+                        "player1_ready": False,
+                        "player2_ready": False,
+
+                        "countdown_task": None,
+
+                        "problem": None,
+
+                        "timer_task": None,
+                        "time_remaining": 900,
+
+                        "started_at": None,
+
+                        "player1_final_submitted": False,
+                        "player2_final_submitted": False,
+
+                        "player1_final_score": 0.0,
+                        "player2_final_score": 0.0,
+
+                        "player1_final_time": None,
+                        "player2_final_time": None,
+
+                        "finalized": False,
+                    }
+
+                    user_room[
+                        player1_id
+                    ] = room_id
+
+                    user_room[
+                        player2_id
+                    ] = room_id
+
+                try:
+                    player1_response = (
+                        supabase
+                        .table("profiles")
+                        .select("username")
+                        .eq(
+                            "id",
+                            player1_id,
+                        )
+                        .execute()
+                    )
+
+                    player2_response = (
+                        supabase
+                        .table("profiles")
+                        .select("username")
+                        .eq(
+                            "id",
+                            player2_id,
+                        )
+                        .execute()
+                    )
+
+                    player1_name = (
+                        player1_response.data[0][
+                            "username"
+                        ]
+                        if player1_response.data
+                        else "Player 1"
+                    )
+
+                    player2_name = (
+                        player2_response.data[0][
+                            "username"
+                        ]
+                        if player2_response.data
+                        else "Player 2"
+                    )
+
+                except Exception:
+                    player1_name = "Player 1"
+                    player2_name = "Player 2"
+
+                await send_to_user(
+                    player1_id,
+                    {
+                        "type": "battle_found",
+                        "room_id": room_id,
+                        "opponent_username": (
+                            player2_name
+                        ),
+                        "difficulty": difficulty,
+                    },
+                )
+
+                await send_to_user(
+                    player2_id,
+                    {
+                        "type": "battle_found",
+                        "room_id": room_id,
+                        "opponent_username": (
+                            player1_name
+                        ),
+                        "difficulty": difficulty,
+                    },
+                )
+
+                logger.info(
+                    "Battle found: %s vs %s",
+                    player1_name,
+                    player2_name,
+                )
+
+            # =================================================
+            # LEAVE QUEUE
+            # =================================================
+
+            elif msg_type == "leave_queue":
+                async with queue_lock:
+                    for queue in queues.values():
+                        if user_id in queue:
+                            queue.remove(user_id)
+
+                await websocket.send_json(
+                    {
+                        "type": "queue_left",
+                    }
+                )
+
+            # =================================================
+            # JOIN ROOM
+            # =================================================
+
+            elif msg_type == "join_room":
+                room_id = data.get("room_id")
+
+                if not room_id:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Missing room_id",
+                        }
+                    )
+
+                    continue
+
+                async with room_lock:
+                    room = rooms.get(room_id)
+
+                    if not room:
+                        room_exists = False
+
+                    else:
+                        room_exists = True
+
+                        if user_id not in (
+                            room["player1_id"],
+                            room["player2_id"],
+                        ):
+                            authorized = False
+
+                        else:
+                            authorized = True
+
+                            user_room[
+                                user_id
+                            ] = room_id
+
+                if not room_exists:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Room not found",
+                        }
+                    )
+
+                    continue
+
+                if not authorized:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": (
+                                "You are not in this room"
+                            ),
+                        }
+                    )
+
+                    continue
+
+                await websocket.send_json(
+                    {
+                        "type": "room_joined",
+                        "room_id": room_id,
+                    }
+                )
+
+                await send_room_state(room_id)
+
+            # =================================================
+            # READY
+            # =================================================
+
+            elif msg_type == "ready":
+                room_id = user_room.get(user_id)
+
+                if not room_id:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Not in a room",
+                        }
+                    )
+
+                    continue
+
+                should_start_countdown = False
+
+                async with room_lock:
+                    room = rooms.get(room_id)
+
+                    if not room:
+                        room_found = False
+
+                    else:
+                        room_found = True
+
+                        if room["status"] not in (
+                            "waiting",
+                            "ready",
+                        ):
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "message": (
+                                        "Battle already started "
+                                        "or finished"
+                                    ),
+                                }
+                            )
+
                             continue
 
-                        print("READY REQUEST")
-                        print("USER:", user_id)
-                        print("ROOM:", room_id)
-                        print("CURRENT STATUS:", room["status"])
-                        print("P1 READY:", room.get("player1_ready"))
-                        print("P2 READY:", room.get("player2_ready"))
+                        if (
+                            user_id
+                            == room["player1_id"]
+                        ):
+                            room[
+                                "player1_ready"
+                            ] = True
 
-                        # Ignore duplicate ready messages
-                        if room["status"] in ("countdown", "active"):
-                            await websocket.send_json({
-                                "type": "room_state",
-                                "room_id": room_id,
-                                "status": room["status"],
-                                "player1_id": room["player1_id"],
-                                "player1_ready": room.get("player1_ready", False),
-                                "player2_id": room["player2_id"],
-                                "player2_ready": room.get("player2_ready", False),
-                                "difficulty": room["difficulty"]
-                            })
-                            continue
+                        elif (
+                            user_id
+                            == room["player2_id"]
+                        ):
+                            room[
+                                "player2_ready"
+                            ] = True
 
-                        if room["status"] not in ("waiting", "ready"):
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": f"Cannot ready now. Status: {room['status']}"
-                            })
-                            continue
-
-                        # Mark this user as ready
-                        if room["player1_id"] == user_id:
-                            room["player1_ready"] = True
-                        elif room["player2_id"] == user_id:
-                            room["player2_ready"] = True
-
-                        # Start countdown only when both players are ready
-                        if room["player1_ready"] and room["player2_ready"]:
+                        if (
+                            room[
+                                "player1_ready"
+                            ]
+                            and room[
+                                "player2_ready"
+                            ]
+                        ):
                             room["status"] = "ready"
 
+                            existing_task = room.get(
+                                "countdown_task"
+                            )
+
                             if (
-                                room.get("countdown_task") is None
-                                or room["countdown_task"].done()
+                                existing_task is None
+                                or existing_task.done()
                             ):
-                                room["countdown_task"] = asyncio.create_task(
-                                    start_countdown(room_id)
+                                should_start_countdown = (
+                                    True
                                 )
+
                         else:
                             room["status"] = "waiting"
 
-                    await send_room_state(room_id)
+                if not room_found:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Room not found",
+                        }
+                    )
 
-                elif msg_type == "not_ready":
-                    room_id = user_room.get(user_id)
-                    if not room_id:
-                        await websocket.send_json({"type": "error", "message": "Not in a room"})
-                        continue
+                    continue
+
+                await send_room_state(room_id)
+
+                if should_start_countdown:
+                    task = asyncio.create_task(
+                        start_countdown(room_id)
+                    )
+
                     async with room_lock:
                         room = rooms.get(room_id)
-                        if not room:
-                            await websocket.send_json({"type": "error", "message": "Room not found"})
-                            continue
-                        if room["status"] not in ("waiting", "ready"):
-                            await websocket.send_json({"type": "error", "message": "Cannot change ready now"})
-                            continue
-                        # Unset user ready
-                        if room["player1_id"] == user_id:
-                            room["player1_ready"] = False
-                        elif room["player2_id"] == user_id:
-                            room["player2_ready"] = False
-                        room["status"] = "waiting"
-                        if (
-                            room.get("countdown_task")
-                            and not room["countdown_task"].done()
+
+                        if room:
+                            room[
+                                "countdown_task"
+                            ] = task
+
+            # =================================================
+            # NOT READY
+            # =================================================
+
+            elif msg_type == "not_ready":
+                room_id = user_room.get(user_id)
+
+                if not room_id:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Not in a room",
+                        }
+                    )
+
+                    continue
+
+                async with room_lock:
+                    room = rooms.get(room_id)
+
+                    if not room:
+                        room_found = False
+
+                    else:
+                        room_found = True
+
+                        if room["status"] not in (
+                            "waiting",
+                            "ready",
                         ):
-                            room["countdown_task"].cancel()
-                            room["countdown_task"] = None
-                    await send_room_state(room_id)
-
-
-                elif msg_type == "submit_code":
-                    room_id = user_room.get(user_id)
-
-                    if not room_id:
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Not in a room"
-                        })
-                        continue
-
-                    code = data.get("code", "")
-
-                    if not code.strip():
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Code is empty"
-                        })
-                        continue
-
-                    async with room_lock:
-                        room = rooms.get(room_id)
-
-                        if not room:
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": "Room not found"
-                            })
                             continue
 
-                        if room["status"] != "active":
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": "Battle not active"
-                            })
-                            continue
+                        if (
+                            user_id
+                            == room["player1_id"]
+                        ):
+                            room[
+                                "player1_ready"
+                            ] = False
 
-                        problem = room.get("problem")
+                        elif (
+                            user_id
+                            == room["player2_id"]
+                        ):
+                            room[
+                                "player2_ready"
+                            ] = False
 
-                        if not problem:
-                            await websocket.send_json({
-                                "type": "error",
-                                "message": "No problem assigned"
-                            })
-                            continue
+                        room["status"] = "waiting"
 
-                        test_cases = problem.get("test_cases", [])
-
-                    
-
-                    try:
-                        result = run_battle_tests(
-                            test_cases,
-                            code
+                        countdown_task = room.get(
+                            "countdown_task"
                         )
 
-                        await websocket.send_json({
+                        if (
+                            countdown_task is not None
+                            and not countdown_task.done()
+                        ):
+                            countdown_task.cancel()
+
+                        room[
+                            "countdown_task"
+                        ] = None
+
+                if room_found:
+                    await send_room_state(
+                        room_id
+                    )
+
+            # =================================================
+            # RUN CODE
+            # =================================================
+
+            elif msg_type == "submit_code":
+                room_id = user_room.get(user_id)
+
+                if not room_id:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Not in a room",
+                        }
+                    )
+
+                    continue
+
+                code = data.get("code", "")
+
+                if not code.strip():
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Code is empty",
+                        }
+                    )
+
+                    continue
+
+                async with room_lock:
+                    room = rooms.get(room_id)
+
+                    if not room:
+                        problem = None
+                        active = False
+
+                    else:
+                        active = (
+                            room["status"]
+                            == "active"
+                        )
+
+                        problem = room.get(
+                            "problem"
+                        )
+
+                if not active:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": (
+                                "Battle not active"
+                            ),
+                        }
+                    )
+
+                    continue
+
+                if not problem:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": (
+                                "No problem assigned"
+                            ),
+                        }
+                    )
+
+                    continue
+
+                try:
+                    result = run_battle_tests(
+                        problem.get(
+                            "test_cases",
+                            [],
+                        ),
+                        code,
+                    )
+
+                    await websocket.send_json(
+                        {
                             "type": "code_result",
                             "room_id": room_id,
-                            "success": result["success"],
-                            "score": result["score"],
-                            "tests_passed": result["tests_passed"],
-                            "total_tests": result["total_tests"],
-                            "output": result["output"],
-                            "details": result["details"]
-                        })
+                            "success": result[
+                                "success"
+                            ],
+                            "score": result[
+                                "score"
+                            ],
+                            "tests_passed": result[
+                                "tests_passed"
+                            ],
+                            "total_tests": result[
+                                "total_tests"
+                            ],
+                            "output": result[
+                                "output"
+                            ],
+                            "details": result[
+                                "details"
+                            ],
+                        }
+                    )
 
-                    except Exception as e:
-                        logger.error(
-                            f"Code execution error for {user_id}: {e}"
-                        )
+                except Exception as exc:
+                    logger.error(
+                        "Code execution error: %s",
+                        exc,
+                    )
 
-                        await websocket.send_json({
+                    await websocket.send_json(
+                        {
                             "type": "code_result",
                             "room_id": room_id,
                             "success": False,
-                            "error": str(e),
-                            "output": "Execution failed"
-                        })
-                
+                            "error": str(exc),
+                            "output": (
+                                "Execution failed"
+                            ),
+                        }
+                    )
 
-                elif msg_type == "ping":
-                    await websocket.send_json({"type": "pong"})
+            # =================================================
+            # SUBMIT FINAL SOLUTION
+            # =================================================
 
-                else:
-                    await websocket.send_json({"type": "error", "message": f"Unknown message type: {msg_type}"})
+            elif msg_type == "submit_final":
+                room_id = user_room.get(user_id)
 
-            except json.JSONDecodeError:
-                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+                if not room_id:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Not in a room",
+                        }
+                    )
+
+                    continue
+
+                code = data.get("code", "")
+
+                if not code.strip():
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Code is empty",
+                        }
+                    )
+
+                    continue
+
+                async with room_lock:
+                    room = rooms.get(room_id)
+
+                    if not room:
+                        room_valid = False
+                        problem = None
+                        is_player1 = False
+
+                    else:
+                        room_valid = True
+
+                        if (
+                            room["status"]
+                            != "active"
+                        ):
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "message": (
+                                        "Battle not active"
+                                    ),
+                                }
+                            )
+
+                            continue
+
+                        if room.get("finalized"):
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "message": (
+                                        "Battle already "
+                                        "finished"
+                                    ),
+                                }
+                            )
+
+                            continue
+
+                        problem = room.get(
+                            "problem"
+                        )
+
+                        is_player1 = (
+                            user_id
+                            == room["player1_id"]
+                        )
+
+                        already_submitted = (
+                            room[
+                                "player1_final_submitted"
+                            ]
+                            if is_player1
+                            else room[
+                                "player2_final_submitted"
+                            ]
+                        )
+
+                        if already_submitted:
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "message": (
+                                        "You already submitted "
+                                        "your final solution"
+                                    ),
+                                }
+                            )
+
+                            continue
+
+                if not room_valid:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": "Room not found",
+                        }
+                    )
+
+                    continue
+
+                if not problem:
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": (
+                                "No problem assigned"
+                            ),
+                        }
+                    )
+
+                    continue
+
+                # Execute outside lock.
+                try:
+                    result = run_battle_tests(
+                        problem.get(
+                            "test_cases",
+                            [],
+                        ),
+                        code,
+                    )
+
+                except Exception as exc:
+                    logger.error(
+                        "Final submission error: %s",
+                        exc,
+                    )
+
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": (
+                                f"Execution error: "
+                                f"{str(exc)}"
+                            ),
+                        }
+                    )
+
+                    continue
+
+                should_finalize = False
+                opponent_id = None
+
+                async with room_lock:
+                    room = rooms.get(room_id)
+
+                    if not room:
+                        continue
+
+                    if room.get("finalized"):
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "message": (
+                                    "Battle already "
+                                    "finished"
+                                ),
+                            }
+                        )
+
+                        continue
+
+                    if (
+                        room["status"]
+                        != "active"
+                    ):
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "message": (
+                                    "Battle not active"
+                                ),
+                            }
+                        )
+
+                        continue
+
+                    current_time = (
+                        datetime.now(timezone.utc)
+                    )
+
+                    started_at_value = room.get(
+                        "started_at"
+                    )
+
+                    elapsed = None
+
+                    if started_at_value:
+                        started_at = (
+                            datetime.fromisoformat(
+                                started_at_value
+                            )
+                        )
+
+                        elapsed = (
+                            current_time
+                            - started_at
+                        ).total_seconds()
+
+                    if is_player1:
+                        if room[
+                            "player1_final_submitted"
+                        ]:
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "message": (
+                                        "You already submitted "
+                                        "your final solution"
+                                    ),
+                                }
+                            )
+
+                            continue
+
+                        room[
+                            "player1_final_submitted"
+                        ] = True
+
+                        room[
+                            "player1_final_score"
+                        ] = result["score"]
+
+                        room[
+                            "player1_final_time"
+                        ] = elapsed
+
+                        opponent_id = room[
+                            "player2_id"
+                        ]
+
+                    else:
+                        if room[
+                            "player2_final_submitted"
+                        ]:
+                            await websocket.send_json(
+                                {
+                                    "type": "error",
+                                    "message": (
+                                        "You already submitted "
+                                        "your final solution"
+                                    ),
+                                }
+                            )
+
+                            continue
+
+                        room[
+                            "player2_final_submitted"
+                        ] = True
+
+                        room[
+                            "player2_final_score"
+                        ] = result["score"]
+
+                        room[
+                            "player2_final_time"
+                        ] = elapsed
+
+                        opponent_id = room[
+                            "player1_id"
+                        ]
+
+                    should_finalize = (
+                        room[
+                            "player1_final_submitted"
+                        ]
+                        and room[
+                            "player2_final_submitted"
+                        ]
+                    )
+
+                # Send acknowledgement.
+                await websocket.send_json(
+                    {
+                        "type": "final_submission_ack",
+                        "room_id": room_id,
+                        "score": result["score"],
+                        "tests_passed": result[
+                            "tests_passed"
+                        ],
+                        "total_tests": result[
+                            "total_tests"
+                        ],
+                        "message": (
+                            "Final solution submitted."
+                        ),
+                    }
+                )
+
+                # Notify opponent.
+                if opponent_id:
+                    await send_to_user(
+                        opponent_id,
+                        {
+                            "type": (
+                                "opponent_submitted"
+                            ),
+                            "room_id": room_id,
+                            "player_id": user_id,
+                        },
+                    )
+
+                # Finalize only after lock is released.
+                if should_finalize:
+                    await finalize_battle(
+                        room_id
+                    )
+
+            # =================================================
+            # PING
+            # =================================================
+
+            elif msg_type == "ping":
+                await websocket.send_json(
+                    {
+                        "type": "pong",
+                    }
+                )
+
+            # =================================================
+            # UNKNOWN MESSAGE
+            # =================================================
+
+            else:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "message": (
+                            "Unknown message type: "
+                            f"{msg_type}"
+                        ),
+                    }
+                )
+
+    # ========================================================
+    # DISCONNECT
+    # ========================================================
 
     except WebSocketDisconnect:
-        # Clean up: remove from queue and active connections
+        logger.info(
+            "Battle WebSocket disconnected: %s",
+            username,
+        )
+
+    except Exception:
+        logger.error(
+            traceback.format_exc()
+        )
+
+    finally:
+        active_connections.pop(
+            user_id,
+            None,
+        )
+
+        # Remove only from matchmaking queues.
         async with queue_lock:
-            for diff in queues:
-                if user_id in queues[diff]:
-                    queues[diff].remove(user_id)
-        # Remove from room if any, and broadcast updated room state
-        room_id = user_room.get(user_id)
-        if room_id:
-            async with room_lock:
-                room = rooms.get(room_id)
-                if room:
-                    # Cancel countdown if running
-                    if (
-                        room.get("countdown_task")
-                        and not room["countdown_task"].done()
-                    ):
-                        room["countdown_task"].cancel()
-                        room["countdown_task"] = None
+            for queue in queues.values():
+                if user_id in queue:
+                    queue.remove(user_id)
 
-                    if (
-                        room.get("timer_task")
-                        and not room["timer_task"].done()
-                    ):
-                        room["timer_task"].cancel()
-                        room["timer_task"] = None
-                    # Mark this user as not ready if they were
-                    if room.get("player1_id") == user_id:
-                        room["player1_ready"] = False
-                    elif room.get("player2_id") == user_id:
-                        room["player2_ready"] = False
-                    # If both players are disconnected, we could delete the room, but we'll keep it.
-                    # Update room status to waiting (since one player may still be there)
-                    room["status"] = "waiting"
-            # Broadcast updated state to the other player if they are still connected
-            await send_room_state(room_id)
-        active_connections.pop(user_id, None)
-        logger.info(f"User {username} disconnected")
-
-    except Exception as e:
-        logger.error(traceback.format_exc())
-        # Clean up
-        active_connections.pop(user_id, None)
-        room_id = user_room.get(user_id)
-        if room_id:
-            # Optionally broadcast state change
-            async with room_lock:
-                room = rooms.get(room_id)
-                if room:
-                    # Cancel countdown if running
-                    if (
-                        room.get("countdown_task")
-                        and not room["countdown_task"].done()
-                    ):
-                        room["countdown_task"].cancel()
-                        room["countdown_task"] = None
-                    if (
-                        room.get("timer_task")
-                        and not room["timer_task"].done()
-                    ):
-                        room["timer_task"].cancel()
-                        room["timer_task"] = None
-                    if room.get("player1_id") == user_id:
-                        room["player1_ready"] = False
-                    elif room.get("player2_id") == user_id:
-                        room["player2_ready"] = False
-                    room["status"] = "waiting"
-            await send_room_state(room_id)
-        await websocket.close(code=1011, reason="Internal error")
+        logger.info(
+            "Battle WebSocket cleanup complete "
+            "for user %s",
+            username,
+        )
