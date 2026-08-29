@@ -98,6 +98,16 @@
         }
       }
 
+      if (event.type === 'code_result' && event.room_id === roomId) {
+        isSubmitting = false;
+        codeResult = event;
+      }
+
+      if (event.type === 'error') {
+        isSubmitting = false;
+        error = event.message || 'Battle error';
+      }
+
       // Countdown updates
       if (event.type === 'countdown_update' && event.room_id === roomId) {
         countdown = event.countdown;
@@ -278,6 +288,7 @@
               <CodeEditor
                 bind:code={code}
                 language="python"
+                onExecute={submitCode}
               />
             </div>
 
