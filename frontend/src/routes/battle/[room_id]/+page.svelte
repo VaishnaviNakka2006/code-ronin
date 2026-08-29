@@ -23,6 +23,7 @@
   let code = '';
   let codeResult: any = null;
   let isSubmitting = false;
+  let codeEditorKey = 0;
 
   function submitCode() {
     if (!code.trim()) {
@@ -134,6 +135,8 @@
           problemData = event.problem;
 
           code = event.problem.starter_code || '';
+
+          codeEditorKey += 1;
 
           codeResult = null;
           isSubmitting = false;
@@ -436,11 +439,13 @@
                 Your Solution
               </p>
 
-              <CodeEditor
-                bind:code={code}
-                language="python"
-                onExecute={submitCode}
-              />
+              {#key codeEditorKey}
+                <CodeEditor
+                  bind:code={code}
+                  language="python"
+                  onExecute={submitCode}
+                />
+              {/key}
 
             </div>
 

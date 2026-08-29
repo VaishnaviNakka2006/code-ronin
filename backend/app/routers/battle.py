@@ -591,39 +591,72 @@ async def websocket_battle(websocket: WebSocket, token: str):
 
                 elif msg_type == "ready":
                     room_id = user_room.get(user_id)
+
                     if not room_id:
-                        await websocket.send_json({"type": "error", "message": "Not in a room"})
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Not in a room"
+                        })
                         continue
+
                     async with room_lock:
                         room = rooms.get(room_id)
+
                         if not room:
-                            await websocket.send_json({"type": "error", "message": "Room not found"})
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": "Room not found"
+                            })
                             continue
+
+                        print("READY REQUEST")
+                        print("USER:", user_id)
+                        print("ROOM:", room_id)
+                        print("CURRENT STATUS:", room["status"])
+                        print("P1 READY:", room.get("player1_ready"))
+                        print("P2 READY:", room.get("player2_ready"))
+
+                        # Ignore duplicate ready messages
+                        if room["status"] in ("countdown", "active"):
+                            await websocket.send_json({
+                                "type": "room_state",
+                                "room_id": room_id,
+                                "status": room["status"],
+                                "player1_id": room["player1_id"],
+                                "player1_ready": room.get("player1_ready", False),
+                                "player2_id": room["player2_id"],
+                                "player2_ready": room.get("player2_ready", False),
+                                "difficulty": room["difficulty"]
+                            })
+                            continue
+
                         if room["status"] not in ("waiting", "ready"):
-                            await websocket.send_json({"type": "error", "message": "Cannot ready now"})
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": f"Cannot ready now. Status: {room['status']}"
+                            })
                             continue
-                        # Set user ready
+
+                        # Mark this user as ready
                         if room["player1_id"] == user_id:
                             room["player1_ready"] = True
                         elif room["player2_id"] == user_id:
                             room["player2_ready"] = True
-                        # Update room status
-                        if room.get("player1_ready") and room.get("player2_ready"):
 
+                        # Start countdown only when both players are ready
+                        if room["player1_ready"] and room["player2_ready"]:
                             room["status"] = "ready"
 
                             if (
                                 room.get("countdown_task") is None
                                 or room["countdown_task"].done()
                             ):
-
-                                task = asyncio.create_task(start_countdown(room_id))
-
-                                room["countdown_task"] = task
-
+                                room["countdown_task"] = asyncio.create_task(
+                                    start_countdown(room_id)
+                                )
                         else:
-
                             room["status"] = "waiting"
+
                     await send_room_state(room_id)
 
                 elif msg_type == "not_ready":
