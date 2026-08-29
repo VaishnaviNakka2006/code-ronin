@@ -701,11 +701,11 @@ async def websocket_battle(websocket: WebSocket, token: str):
 
                         test_cases = problem.get("test_cases", [])
 
-                    converted_test_cases = _convert_test_cases(test_cases)
+                    
 
                     try:
-                        result = MissionEngine.run_tests_from_list(
-                            converted_test_cases,
+                        result = run_battle_tests(
+                            test_cases,
                             code
                         )
 
