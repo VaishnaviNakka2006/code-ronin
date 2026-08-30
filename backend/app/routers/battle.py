@@ -1,9 +1,11 @@
 import asyncio
-import hashlib
 import json
 import logging
 import traceback
 import uuid
+import os
+
+import httpx
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -92,6 +94,17 @@ PROBLEMS = {
     ],
 }
 
+# ============================================================
+# PROBLEM ROTATION STATE
+# ============================================================
+
+problem_indexes = {
+    difficulty: 0
+    for difficulty in PROBLEMS
+}
+
+problem_lock = asyncio.Lock()
+
 
 # ============================================================
 # IN-MEMORY STATE
@@ -117,15 +130,109 @@ room_lock = asyncio.Lock()
 # PROBLEM HELPERS
 # ============================================================
 
-def get_problem_for_difficulty(difficulty: str, seed: str) -> dict:
-    problems = PROBLEMS.get(difficulty, PROBLEMS["easy"])
+async def get_problem_for_difficulty(
+    difficulty: str
+) -> dict:
+    api_key = os.getenv("OLLAMA_API_KEY")
 
-    index = (
-        int(hashlib.md5(seed.encode()).hexdigest(), 16)
-        % len(problems)
-    )
+    if not api_key:
+        logger.error("OLLAMA_API_KEY is not configured")
 
-    return problems[index]
+        return PROBLEMS["easy"][0]
+
+    prompt = f"""
+Generate ONE completely new Python coding challenge.
+
+Difficulty: {difficulty}
+
+The challenge must:
+- Have a different programming logic from common recent questions
+- Be suitable for a coding battle
+- Require a Python function
+- Include 2 to 4 simple test cases
+- Be solvable in a reasonable time
+- Not include the solution
+- Return ONLY valid JSON
+- Do not use markdown
+- Do not add ```json
+
+Return exactly this structure:
+
+{{
+    "title": "Problem title",
+    "description": "Clear problem description",
+    "starter_code": "def function_name(...):\\n    # Your code here\\n    pass",
+    "test_cases": [
+        {{
+            "input": "function_name(...)",
+            "expected": "..."
+        }},
+        {{
+            "input": "function_name(...)",
+            "expected": "..."
+        }}
+    ]
+}}
+"""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": "gpt-oss:120b-cloud",
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        "stream": False,
+    }
+
+    try:
+        async with httpx.AsyncClient(
+            timeout=60.0
+        ) as client:
+
+            response = await client.post(
+                "https://ollama.com/api/chat",
+                headers=headers,
+                json=payload,
+            )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        content = data["message"]["content"]
+
+        problem = json.loads(content)
+
+        return problem
+
+    except Exception as exc:
+        logger.error(
+            "AI problem generation failed: %s",
+            exc,
+        )
+
+        return PROBLEMS.get(
+            difficulty,
+            PROBLEMS["easy"]
+        )[0]
+
+# ============================================================
+# AI PROBLEM GENERATION
+# ============================================================
+
+async def generate_ai_problem(
+    difficulty: str,
+    room_id: str,
+) -> dict:
+    # AI generation code will come here
+    pass
 
 
 # ============================================================
@@ -379,10 +486,18 @@ async def start_countdown(room_id: str):
 
             difficulty = room["difficulty"]
 
-            problem = get_problem_for_difficulty(
-                difficulty,
-                room_id,
-            )
+
+        problem = await generate_ai_problem(
+            difficulty,
+            room_id,
+        )
+
+
+        async with room_lock:
+            room = rooms.get(room_id)
+
+            if not room:
+                return
 
             room["problem"] = problem
             room["status"] = "active"
