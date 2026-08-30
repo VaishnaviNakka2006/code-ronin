@@ -264,6 +264,16 @@ class BattleWebSocketService {
         console.log('Battle started:', data.problem);
         this.battleProblem.set(data.problem);
         break;
+
+      case 'room_state':
+        console.log('ROOM STATE:', data);
+
+      
+        if (data.problem) {
+          console.log('Problem received:', data.problem);
+          this.battleProblem.set(data.problem);
+        }
+        break;
       case 'error':
         console.error('Battle WebSocket error from server:', data.message);
         break;

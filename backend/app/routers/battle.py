@@ -396,6 +396,7 @@ async def send_room_state(room_id: str):
                 False,
             ),
             "difficulty": room["difficulty"],
+            "problem": room.get("problem"),
         }
 
     await send_to_user(player1_id, state)
