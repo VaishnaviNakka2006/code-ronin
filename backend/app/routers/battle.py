@@ -231,8 +231,39 @@ async def generate_ai_problem(
     difficulty: str,
     room_id: str,
 ) -> dict:
-    # AI generation code will come here
-    pass
+    """
+    Generate a problem for the battle.
+    Falls back to predefined problems if AI generation fails.
+    """
+
+    logger.info(
+        "Generating problem for room %s with difficulty %s",
+        room_id,
+        difficulty,
+    )
+
+    problem = await get_problem_for_difficulty(
+        difficulty
+    )
+
+    if not problem:
+        logger.error(
+            "Problem generation returned None for room %s",
+            room_id,
+        )
+
+        problem = PROBLEMS.get(
+            difficulty,
+            PROBLEMS["easy"]
+        )[0]
+
+    logger.info(
+        "Problem generated for room %s: %s",
+        room_id,
+        problem.get("title"),
+    )
+
+    return problem
 
 
 # ============================================================
@@ -492,6 +523,22 @@ async def start_countdown(room_id: str):
             difficulty,
             room_id,
         )
+        if not problem:
+            logger.error(
+                "Failed to generate problem for room %s",
+                room_id,
+            )
+
+            async with room_lock:
+                room = rooms.get(room_id)
+
+                if room:
+                    room["status"] = "waiting"
+                    room["countdown_task"] = None
+
+            await send_room_state(room_id)
+
+            return
 
 
         async with room_lock:
@@ -512,6 +559,12 @@ async def start_countdown(room_id: str):
             player1_id = room["player1_id"]
             player2_id = room["player2_id"]
 
+        logger.info(
+           "Sending battle_start for room %s with problem %s",
+            room_id,
+            problem.get("title"),
+        )
+        
         battle_start_event = {
             "type": "battle_start",
             "room_id": room_id,
