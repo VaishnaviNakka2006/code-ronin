@@ -29,6 +29,7 @@ class BattleWebSocketService {
   public opponentUsername: Writable<string | null> = writable(null);
   public difficulty: Writable<string | null> = writable(null);
 
+  public battleProblem: Writable<any | null> = writable(null);
   // ---------- Public Methods ----------
   async connect(): Promise<void> {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
@@ -233,6 +234,7 @@ class BattleWebSocketService {
     this.roomId.set(null);
     this.opponentUsername.set(null);
     this.difficulty.set(null);
+    this.battleProblem.set(null);
   }
 
   private handleMessage(data: BattleEvent): void {
@@ -255,6 +257,12 @@ class BattleWebSocketService {
         this.roomId.set(data.room_id);
         this.opponentUsername.set(data.opponent_username);
         this.difficulty.set(data.difficulty);
+        this.battleProblem.set(null);
+        break;
+
+      case 'battle_start':
+        console.log('Battle started:', data.problem);
+        this.battleProblem.set(data.problem);
         break;
       case 'error':
         console.error('Battle WebSocket error from server:', data.message);
