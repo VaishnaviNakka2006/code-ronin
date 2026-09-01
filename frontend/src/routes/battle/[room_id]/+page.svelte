@@ -69,12 +69,6 @@
         const session = await supabase.auth.getSession();
         myUserId = session.data.session?.user?.id || '';
 
-        await fetchRoom();
-
-        if (!roomInfo) {
-          return;
-        }
-
         unsubscribe = battleWS.onMessage((event) => {
           console.log('BATTLE ROOM EVENT:', event);
 
@@ -100,13 +94,39 @@
           // ================================
           if (event.type === 'room_state' && event.room_id === roomId) {
             console.log('ROOM STATE:', event);
+
             roomStatus = event.status;
+
             if (event.player1_id === myUserId) {
               myReady = event.player1_ready;
               opponentReady = event.player2_ready;
             } else if (event.player2_id === myUserId) {
               myReady = event.player2_ready;
               opponentReady = event.player1_ready;
+            }
+
+            // IMPORTANT:
+            // If backend says the battle is active and provides a problem,
+            // make sure the UI enters the coding screen even if battle_start
+            // was missed during reconnect/timing.
+            if (
+              event.status === 'active' &&
+              event.problem
+            ) {
+              console.log(
+                'ROOM STATE contains active battle:',
+                event.problem
+              );
+
+              battleStarted = true;
+              countdown = null;
+              problemData = event.problem;
+
+              if (!code.trim()) {
+                code = event.problem.starter_code || '';
+              }
+
+              codeEditorKey += 1;
             }
           }
 
@@ -124,12 +144,19 @@
           // ================================
           if (event.type === 'battle_start' && event.room_id === roomId) {
             console.log('BATTLE START:', event);
+
             battleStarted = true;
             countdown = null;
             roomStatus = 'active';
+
             problemData = event.problem;
-            code = event.problem?.starter_code || '';
+
+            if (event.problem) {
+              code = event.problem.starter_code || '';
+            }
+
             codeEditorKey += 1;
+
             codeResult = null;
             isSubmitting = false;
             finalSubmitted = false;
@@ -138,6 +165,11 @@
             battleResult = null;
             showResult = false;
             gameOver = false;
+
+            console.log(
+              'Battle UI activated. Problem:',
+              event.problem
+            );
           }
 
           // ================================
@@ -191,6 +223,12 @@
             finalSubmitting = false;
           }
         });
+
+        await fetchRoom();
+
+        if (!roomInfo) {
+          return;
+        }
 
         await battleWS.connect();
         console.log('Joining battle room:', roomId);
