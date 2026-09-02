@@ -1861,6 +1861,34 @@ async def websocket_battle(
                         ]
                     )
 
+                # --------------------------------------------------------
+                # SAVE USER SUBMISSION
+                # --------------------------------------------------------
+
+                try:
+                    supabase.table("battle_submissions").insert(
+                        {
+                            "battle_id": room_id,
+                            "user_id": user_id,
+                            "code": code,
+                            "score": result["score"],
+                            "tests_passed": result["tests_passed"],
+                            "total_tests": result["total_tests"],
+                        }
+                    ).execute()
+
+                    logger.info(
+                        "Saved battle submission: user=%s room=%s",
+                        user_id,
+                        room_id,
+                    )
+
+                except Exception as exc:
+                    logger.error(
+                        "Failed to save battle submission: %s",
+                        exc,
+                    )
+                
                 # Send acknowledgement.
                 await websocket.send_json(
                     {
