@@ -7,7 +7,7 @@ import os
 
 import httpx
 from datetime import datetime, timezone
-
+from fastapi import HTTPException
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from app.db import supabase
@@ -935,6 +935,39 @@ async def get_room_info(room_id: str):
         "difficulty": difficulty,
         "status": status,
     }
+
+# ============================================================
+# GET MY BATTLE SUBMISSIONS
+# ============================================================
+
+@router.get("/submissions")
+async def get_my_submissions(
+    user_id: str
+):
+    try:
+        result = (
+            supabase
+            .table("battle_submissions")
+            .select("*")
+            .eq("user_id", user_id)
+            .order("submitted_at", desc=True)
+            .execute()
+        )
+
+        return {
+            "submissions": result.data or []
+        }
+
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch user submissions: %s",
+            exc
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch submissions"
+        )
 
 
 # ============================================================
@@ -1984,3 +2017,5 @@ async def websocket_battle(
             "for user %s",
             username,
         )
+
+        
