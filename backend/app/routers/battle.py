@@ -1149,29 +1149,34 @@ async def websocket_battle(
                     user_room[player2_id] = room_id
 
 
-                # Create battle record immediately
-                try:
-                    supabase.table("battles").insert(
-                        {
-                            "id": room_id,
-                            "player1_id": player1_id,
-                            "player2_id": player2_id,
-                            "difficulty": difficulty,
-                            "status": "waiting",
-                        }
-                    ).execute()
+                    # Create battle record immediately
+                    try:
+                        battle_response = (
+                            supabase.table("battles").insert(
+                                {
+                                    "id": room_id,  # IMPORTANT
+                                    "room_id": room_id,
+                                    "player1_id": player1_id,
+                                    "player2_id": player2_id,
+                                    "difficulty": difficulty,
+                                    "status": "waiting",
+                                }
+                            )
+                            .execute()
+                        )
 
-                    logger.info(
-                        "Battle record created: %s",
-                        room_id,
-                    )
+                        logger.info(
+                            "Battle record created: %s",
+                            room_id,
+                        )
 
-                except Exception as exc:
-                    logger.error(
-                        "Failed to create battle record %s: %s",
-                        room_id,
-                        exc,
-                    )
+
+                    except Exception as exc:
+                        logger.error(
+                            "Failed to create battle record %s: %s",
+                            room_id,
+                            exc,
+                        )
 
                 try:
                     player1_response = (
