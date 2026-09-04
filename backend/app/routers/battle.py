@@ -1115,6 +1115,7 @@ async def websocket_battle(
 
                 async with room_lock:
                     rooms[room_id] = {
+                        "battle_id": None,
                         "player1_id": player1_id,
                         "player2_id": player2_id,
                         "difficulty": difficulty,
@@ -1154,7 +1155,6 @@ async def websocket_battle(
                         battle_response = (
                             supabase.table("battles").insert(
                                 {
-                                    "id": room_id,  # IMPORTANT
                                     "room_id": room_id,
                                     "player1_id": player1_id,
                                     "player2_id": player2_id,
@@ -1165,11 +1165,17 @@ async def websocket_battle(
                             .execute()
                         )
 
-                        logger.info(
-                            "Battle record created: %s",
-                            room_id,
-                        )
+                        # Get the actual primary-key ID from battles
+                        battle_id = battle_response.data[0]["id"]
 
+                        # Store it in the room so submissions can use it
+                        rooms[room_id]["battle_id"] = battle_id
+
+                        logger.info(
+                            "Battle record created: room=%s battle_id=%s",
+                            room_id,
+                            battle_id,
+                        )
 
                     except Exception as exc:
                         logger.error(
@@ -1926,11 +1932,9 @@ async def websocket_battle(
 
                 try:
                     submission = (
-                        supabase
-                        .table("battle_submissions")
-                        .insert(
+                        supabase.table("battle_submissions").insert(
                             {
-                                "battle_id": room_id,
+                                "battle_id": room["battle_id"],
                                 "user_id": user_id,
                                 "code": code,
                                 "score": result["score"],
