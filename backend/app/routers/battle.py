@@ -966,7 +966,7 @@ async def get_my_submissions(
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to fetch submissions"
+            detail=f"Failed to fetch submissions: {str(exc)}"
         )
 
 
