@@ -1899,21 +1899,27 @@ async def websocket_battle(
                 # --------------------------------------------------------
 
                 try:
-                    supabase.table("battle_submissions").insert(
-                        {
-                            "battle_id": room_id,
-                            "user_id": user_id,
-                            "code": code,
-                            "score": result["score"],
-                            "tests_passed": result["tests_passed"],
-                            "total_tests": result["total_tests"],
-                        }
-                    ).execute()
+                    submission = (
+                        supabase
+                        .table("battle_submissions")
+                        .insert(
+                            {
+                                "battle_id": room_id,
+                                "user_id": user_id,
+                                "code": code,
+                                "score": result["score"],
+                                "tests_passed": result["tests_passed"],
+                                "total_tests": result["total_tests"],
+                            }
+                        )
+                        .execute()
+                    )
 
                     logger.info(
-                        "Saved battle submission: user=%s room=%s",
+                        "Saved battle submission: user=%s room=%s data=%s",
                         user_id,
                         room_id,
+                        submission.data,
                     )
 
                 except Exception as exc:
@@ -1921,6 +1927,15 @@ async def websocket_battle(
                         "Failed to save battle submission: %s",
                         exc,
                     )
+
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": f"Failed to save submission: {str(exc)}",
+                        }
+                    )
+
+                    continue
                 
                 # Send acknowledgement.
                 await websocket.send_json(
