@@ -1153,7 +1153,9 @@ async def websocket_battle(
                     # Create battle record immediately
                     try:
                         battle_response = (
-                            supabase.table("battles").insert(
+                            supabase
+                            .table("battles")
+                            .insert(   
                                 {
                                     "room_id": room_id,
                                     "player1_id": player1_id,
@@ -1166,33 +1168,33 @@ async def websocket_battle(
                         )
 
                         if not battle_response.data:
-                            raise Exception("Battle was not created in database")
+                            raise Exception(
+                                "Battle was not created in database"
+                            )
 
-                        # Get the actual primary-key ID from battles
+                        # Get the REAL primary-key ID from battles
                         battle_id = battle_response.data[0]["id"]
 
-                        # Store the REAL battles.id in the room
+                        # Store that ID in the room
                         rooms[room_id]["battle_id"] = str(battle_id)
 
                         logger.info(
-                            "Battle record created: room=%s battle_id=%s",
+                            "Battle created: room_id=%s battle_id=%s",
                             room_id,
                             battle_id,
                         )
 
                     except Exception as exc:
                         logger.error(
-                            "Failed to create battle record %s: %s",
+                            "Failed to create battle %s: %s",
                             room_id,
                             exc,
                         )
 
-                        # Remove the invalid room
                         rooms.pop(room_id, None)
                         user_room.pop(player1_id, None)
                         user_room.pop(player2_id, None)
 
-                        # Tell both players
                         await send_to_user(
                             player1_id,
                             {
@@ -1209,7 +1211,6 @@ async def websocket_battle(
                             },
                         )
 
-                        # Stop this websocket message processing
                         continue
 
                 try:
