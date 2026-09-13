@@ -1959,10 +1959,35 @@ async def websocket_battle(
                 # --------------------------------------------------------
 
                 try:
+                    # Get the REAL battle ID from the database using the room ID
+                    battle_response = (
+                        supabase
+                        .table("battles")
+                        .select("id")
+                        .eq("room_id", room_id)
+                        .limit(1)
+                        .execute()
+                    )
+
+                    if not battle_response.data:
+                        raise Exception(
+                            f"No battle found in database for room_id={room_id}"
+                        )
+
+                    battle_id = battle_response.data[0]["id"]
+
+                    logger.info(
+                        "Using database battle_id=%s for room_id=%s",
+                        battle_id,
+                        room_id,
+                    )
+
                     submission = (
-                        supabase.table("battle_submissions").insert(
+                        supabase
+                        .table("battle_submissions")
+                        .insert(
                             {
-                                "battle_id": room["battle_id"],
+                                "battle_id": str(battle_id),
                                 "user_id": user_id,
                                 "code": code,
                                 "score": result["score"],
@@ -1974,9 +1999,10 @@ async def websocket_battle(
                     )
 
                     logger.info(
-                        "Saved battle submission: user=%s room=%s data=%s",
+                        "Saved battle submission: user=%s room=%s battle_id=%s data=%s",
                         user_id,
                         room_id,
+                        battle_id,
                         submission.data,
                     )
 
