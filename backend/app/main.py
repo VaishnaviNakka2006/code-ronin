@@ -27,6 +27,29 @@ load_dotenv()
 
 app = FastAPI(title="NEXUS Code Ronin API")
 
+@app.get("/debug/database")
+async def debug_database():
+    try:
+        result = (
+            supabase
+            .table("battles")
+            .select("id, room_id, created_at")
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+        )
+
+        return {
+            "success": True,
+            "battles": result.data,
+        }
+
+    except Exception as exc:
+        return {
+            "success": False,
+            "error": str(exc),
+        }
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173",
