@@ -1177,6 +1177,25 @@ async def websocket_battle(
 
                         # Store that ID in the room
                         rooms[room_id]["battle_id"] = str(battle_id)
+                        verify = (
+                            supabase
+                            .table("battles")
+                            .select("id, room_id")
+                            .eq("id", str(battle_id))
+                            .limit(1)
+                            .execute()
+                        )
+
+                        if not verify.data:
+                            raise Exception(
+                                f"Battle {battle_id} was created but cannot be found immediately afterward"
+                            )
+
+                        logger.info(
+                            "VERIFIED battle exists: id=%s room_id=%s",
+                            battle_id,
+                            room_id,
+                        )
 
                         logger.info(
                             "Battle created: room_id=%s battle_id=%s",
