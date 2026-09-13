@@ -1165,6 +1165,9 @@ async def websocket_battle(
                             .execute()
                         )
 
+                        if not battle_response.data:
+                            raise Exception("Battle was not created in database")
+
                         # Get the actual primary-key ID from battles
                         battle_id = battle_response.data[0]["id"]
 
@@ -1183,6 +1186,29 @@ async def websocket_battle(
                             room_id,
                             exc,
                         )
+
+                        # Do not allow a battle without a database battle_id
+                        rooms.pop(room_id, None)
+                        user_room.pop(player1_id, None)
+                        user_room.pop(player2_id, None)
+
+                        await send_to_user(
+                            player1_id,
+                            {
+                                "type": "error",
+                                "message": "Failed to create battle.",
+                            },
+                        )
+
+                        await send_to_user(
+                            player2_id,
+                            {
+                                "type": "error",
+                                "message": "Failed to create battle.",
+                            },
+                        )
+
+                        continue
 
                 try:
                     player1_response = (
