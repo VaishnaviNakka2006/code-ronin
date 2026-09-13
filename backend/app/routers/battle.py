@@ -1174,6 +1174,11 @@ async def websocket_battle(
 
                         # Get the REAL primary-key ID from battles
                         battle_id = battle_response.data[0]["id"]
+                        logger.info(
+                            "Battle created: room_id=%s battle_id=%s",
+                            room_id,
+                            battle_id,
+                        )
 
                         # Store that ID in the room
                         rooms[room_id]["battle_id"] = str(battle_id)
@@ -1197,11 +1202,7 @@ async def websocket_battle(
                             room_id,
                         )
 
-                        logger.info(
-                            "Battle created: room_id=%s battle_id=%s",
-                            room_id,
-                            battle_id,
-                        )
+
 
                     except Exception as exc:
                         logger.error(
