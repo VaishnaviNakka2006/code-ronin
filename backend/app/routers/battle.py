@@ -1171,8 +1171,8 @@ async def websocket_battle(
                         # Get the actual primary-key ID from battles
                         battle_id = battle_response.data[0]["id"]
 
-                        # Store it in the room so submissions can use it
-                        rooms[room_id]["battle_id"] = battle_id
+                        # Store the REAL battles.id in the room
+                        rooms[room_id]["battle_id"] = str(battle_id)
 
                         logger.info(
                             "Battle record created: room=%s battle_id=%s",
@@ -1187,11 +1187,12 @@ async def websocket_battle(
                             exc,
                         )
 
-                        # Do not allow a battle without a database battle_id
+                        # Remove the invalid room
                         rooms.pop(room_id, None)
                         user_room.pop(player1_id, None)
                         user_room.pop(player2_id, None)
 
+                        # Tell both players
                         await send_to_user(
                             player1_id,
                             {
@@ -1208,6 +1209,7 @@ async def websocket_battle(
                             },
                         )
 
+                        # Stop this websocket message processing
                         continue
 
                 try:
