@@ -1153,104 +1153,127 @@ async def websocket_battle(
                     # Create battle record immediately
                     try:
                         # ============================================================
-                        # GET REAL BATTLE ID FROM DATABASE USING ROOM ID
+                        # CREATE BATTLE IN DATABASE
                         # ============================================================
 
                         logger.info(
-                            "Looking up battle for room_id=%s before saving submission",
+                            "CREATING BATTLE: room_id=%s player1=%s player2=%s difficulty=%s",
                             room_id,
+                            player1_id,
+                            player2_id,
+                            difficulty,
                         )
 
                         battle_response = (
                             supabase
                             .table("battles")
-                            .select("id, room_id, player1_id, player2_id")
-                            .eq("room_id", room_id)
-                            .order("created_at", desc=True)
-                            .limit(1)
-                            .execute()
-                        )
-
-                        logger.info(
-                            "Battle lookup result for room_id=%s: %s",
-                            room_id,
-                            battle_response.data,
-                        )
-
-                        if not battle_response.data:
-                            raise Exception(
-                                f"No battle exists in database for room_id={room_id}"
-                            )
-
-                        # THIS is the REAL primary-key ID from battles
-                        battle_id = battle_response.data[0]["id"]
-
-                        logger.info(
-                            "REAL DATABASE battle_id=%s for room_id=%s",
-                            battle_id,
-                            room_id,
-                        )
-
-                        # ============================================================
-                        # VERIFY THAT THE BATTLE ACTUALLY EXISTS
-                        # ============================================================
-
-                        verify_response = (
-                            supabase
-                            .table("battles")
-                            .select("id")
-                            .eq("id", battle_id)
-                            .limit(1)
-                            .execute()
-                        )
-
-                        if not verify_response.data:
-                            raise Exception(
-                                f"Battle ID {battle_id} was not found in battles table"
-                            )
-
-                        # ============================================================
-                        # SAVE SUBMISSION
-                        # ============================================================
-
-                        submission = (
-                            supabase
-                            .table("battle_submissions")
                             .insert(
                                 {
-                                    "battle_id": battle_id,
-                                    "user_id": user_id,
-                                    "code": code,
-                                    "score": result["score"],
-                                    "tests_passed": result["tests_passed"],
-                                    "total_tests": result["total_tests"],
+                                    "room_id": room_id,
+                                    "player1_id": player1_id,
+                                    "player2_id": player2_id,
+                                    "difficulty": difficulty,
+                                    "status": "waiting",
                                 }
                             )
                             .execute()
                         )
 
                         logger.info(
-                            "SUBMISSION SAVED SUCCESSFULLY: "
-                            "user=%s room=%s battle_id=%s data=%s",
-                            user_id,
+                            "BATTLE INSERT RESPONSE: %s",
+                            battle_response.data,
+                        )
+
+                        if not battle_response.data:
+                            raise Exception(
+                                "Battle was not created in database"
+                            )
+
+                        # ============================================================
+                        # GET REAL DATABASE PRIMARY KEY
+                        # ============================================================
+
+                        battle_id = battle_response.data[0]["id"]
+                    
+                        logger.info(
+                            "DATABASE BATTLE CREATED: battle_id=%s room_id=%s",
+                            battle_id,
+                            room_id,
+                        )
+                    
+                        # ============================================================
+                        # VERIFY BATTLE EXISTS
+                        # ============================================================
+                    
+                        verify_response = (
+                            supabase
+                            .table("battles")
+                            .select("id, room_id, player1_id, player2_id, status")
+                            .eq("id", battle_id)
+                            .limit(1)
+                            .execute()
+                        )
+                    
+                        logger.info(
+                            "BATTLE VERIFICATION: %s",
+                            verify_response.data,
+                        )
+                    
+                        if not verify_response.data:
+                            raise Exception(
+                                f"Battle {battle_id} was created but verification failed"
+                            )
+                    
+                        # ============================================================
+                        # VERIFY ROOM ID MATCHES
+                        # ============================================================
+                    
+                        if verify_response.data[0]["room_id"] != room_id:
+                            raise Exception(
+                                "ROOM/BATTLE MISMATCH: "
+                                f"expected room_id={room_id}, "
+                                f"database room_id={verify_response.data[0]['room_id']}"
+                            )
+                    
+                        # ============================================================
+                        # STORE DATABASE BATTLE ID IN MEMORY
+                        # ============================================================
+                    
+                        rooms[room_id]["battle_id"] = str(battle_id)
+                    
+                        logger.info(
+                            "BATTLE READY: room_id=%s battle_id=%s",
                             room_id,
                             battle_id,
-                            submission.data,
                         )
-
+                    
                     except Exception as exc:
                         logger.error(
-                            "FAILED TO SAVE BATTLE SUBMISSION: %s",
+                            "FAILED TO CREATE BATTLE: room_id=%s error=%s",
+                            room_id,
                             exc,
                         )
-
-                        await websocket.send_json(
+                    
+                        rooms.pop(room_id, None)
+                        user_room.pop(player1_id, None)
+                        user_room.pop(player2_id, None)
+                    
+                        await send_to_user(
+                            player1_id,
                             {
                                 "type": "error",
-                                "message": f"Failed to save submission: {str(exc)}",
-                            }
+                                "message": "Failed to create battle.",
+                            },
                         )
-
+                    
+                        await send_to_user(
+                            player2_id,
+                            {
+                                "type": "error",
+                                "message": "Failed to create battle.",
+                            },
+                        )
+                    
                         continue
 
                 try:
