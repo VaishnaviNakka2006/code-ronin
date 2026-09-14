@@ -2023,47 +2023,116 @@ async def websocket_battle(
                 # --------------------------------------------------------
 
                 try:
-                    # Get the REAL battle ID from the database using the room ID
+                    # ====================================================
+                    # GET THE REAL BATTLE FROM DATABASE
+                    # ====================================================
+
                     battle_response = (
                         supabase
                         .table("battles")
-                        .select("id")
+                        .select(
+                            "id, room_id, player1_id, player2_id, status, created_at"
+                        )
                         .eq("room_id", room_id)
+                        .order("created_at", desc=True)
                         .limit(1)
                         .execute()
                     )
 
+                    logger.info(
+                        "BATTLE LOOKUP FOR SUBMISSION: room_id=%s result=%s",
+                        room_id,
+                        battle_response.data,
+                    )
+
                     if not battle_response.data:
                         raise Exception(
-                            f"No battle found in database for room_id={room_id}"
+                            f"No battle exists in database for room_id={room_id}"
                         )
 
-                    battle_id = battle_response.data[0]["id"]
+                    battle = battle_response.data[0]
+
+                    # THIS IS THE REAL PRIMARY KEY FROM battles TABLE
+                    battle_id = battle["id"]
 
                     logger.info(
-                        "Using database battle_id=%s for room_id=%s",
-                        battle_id,
+                        "RESOLVED REAL BATTLE ID: room_id=%s battle_id=%s",
                         room_id,
+                        battle_id,
+                    )
+
+                    # ====================================================
+                    # EXTRA SAFETY CHECK
+                    # ====================================================
+
+                    if str(battle["room_id"]) != str(room_id):
+                        raise Exception(
+                            f"Battle/room mismatch: "
+                            f"database room_id={battle['room_id']} "
+                            f"requested room_id={room_id}"
+                        )
+
+                    # Make sure this user actually belongs to this battle
+                    if str(user_id) not in (
+                        str(battle["player1_id"]),
+                        str(battle["player2_id"]),
+                    ):
+                        raise Exception(
+                            f"User {user_id} does not belong to battle {battle_id}"
+                        )
+
+                    # ====================================================
+                    # VERIFY THE EXACT BATTLE ID EXISTS
+                    # ====================================================
+
+                    verify_battle = (
+                        supabase
+                        .table("battles")
+                        .select("id")
+                        .eq("id", battle_id)
+                        .limit(1)
+                        .execute()
+                    )
+
+                    logger.info(
+                        "FINAL BATTLE ID VERIFICATION: %s",
+                        verify_battle.data,
+                    )
+
+                    if not verify_battle.data:
+                        raise Exception(
+                            f"Resolved battle_id={battle_id} "
+                            f"does not exist in battles table"
+                        )
+
+                    # ====================================================
+                    # SAVE SUBMISSION USING ONLY THIS DATABASE ID
+                    # ====================================================
+
+                    submission_payload = {
+                        "battle_id": battle_id,
+                        "user_id": user_id,
+                        "code": code,
+                        "score": result["score"],
+                        "tests_passed": result["tests_passed"],
+                        "total_tests": result["total_tests"],
+                    }
+
+                    logger.info(
+                        "INSERTING BATTLE SUBMISSION: %s",
+                        submission_payload,
                     )
 
                     submission = (
                         supabase
                         .table("battle_submissions")
-                        .insert(
-                            {
-                                "battle_id": str(battle_id),
-                                "user_id": user_id,
-                                "code": code,
-                                "score": result["score"],
-                                "tests_passed": result["tests_passed"],
-                                "total_tests": result["total_tests"],
-                            }
-                        )
+                        .insert(submission_payload)
                         .execute()
                     )
 
                     logger.info(
-                        "Saved battle submission: user=%s room=%s battle_id=%s data=%s",
+                        "SUBMISSION SAVED SUCCESSFULLY: "
+                        "user=%s room=%s battle_id=%s data=%s",
                         user_id,
                         room_id,
                         battle_id,
@@ -2071,9 +2140,10 @@ async def websocket_battle(
                     )
 
                 except Exception as exc:
-                    logger.error(
-                        "Failed to save battle submission: %s",
-                        exc,
+                    logger.exception(
+                        "FAILED TO SAVE BATTLE SUBMISSION: room_id=%s user_id=%s",
+                        room_id,
+                        user_id,
                     )
 
                     await websocket.send_json(
@@ -2084,7 +2154,7 @@ async def websocket_battle(
                     )
 
                     continue
-                
+
                 # Send acknowledgement.
                 await websocket.send_json(
                     {
