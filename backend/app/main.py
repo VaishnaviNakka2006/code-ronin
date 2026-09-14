@@ -26,6 +26,9 @@ from app.websocket import manager
 load_dotenv()
 
 app = FastAPI(title="NEXUS Code Ronin API")
+@app.options("/debug-cors")
+async def debug_cors():
+    return {"cors": "ok"}
 
 @app.get("/debug/database")
 async def debug_database():
@@ -52,12 +55,19 @@ async def debug_database():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-                   "https://code-ronin-frontend.onrender.com"
+    allow_origins=[
+        "http://localhost:5173",
+        "https://code-ronin-frontend.onrender.com",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+    ],
 )
 app.state.limiter = limiter
 
