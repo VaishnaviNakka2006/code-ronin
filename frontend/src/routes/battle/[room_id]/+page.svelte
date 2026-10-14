@@ -6,6 +6,7 @@
   import { supabase } from '$lib/supabaseClient';
   import { getBattleRoom } from '$lib/api/battle';
   import CodeEditor from '$lib/components/CodeEditor.svelte';
+  import BattleArenaHUD from '$lib/components/battle/BattleArenaHUD.svelte';
 
   let roomId = $page.params.room_id ?? '';
   let roomInfo: any = null;
@@ -313,7 +314,7 @@
 </script>
 
 <div class="min-h-screen bg-neon-dark p-8">
-  <div class="max-w-2xl mx-auto">
+  <div class="max-w-7xl mx-auto">
 
     {#if loading}
       <div class="text-neon-cyan font-mono animate-pulse">
@@ -378,92 +379,18 @@
       <!-- Main Battle UI -->
       <div class="bg-black/40 p-6 rounded-lg border border-neon-cyan shadow-lg">
 
-        <h1 class="text-3xl font-mono glow-text mb-4">
-          ⚔️ BATTLE ROOM
-        </h1>
-
-        <!-- Room Info -->
-        <div class="flex flex-wrap justify-between gap-4 text-sm text-gray-300 border-b border-neon-cyan/30 pb-4 mb-4">
-          <span>
-            Room: <span class="font-mono text-neon-cyan">{roomId.slice(0, 8)}</span>
-          </span>
-          <span>
-            Difficulty: <span class="text-yellow-400 font-mono">{roomInfo.difficulty}</span>
-          </span>
-          <span>
-            Status: <span class="font-mono {roomStatus === 'active' ? 'text-green-400' : 'text-yellow-400'}">
-              {statusLabel}
-            </span>
-          </span>
-          <span>
-            ⏱️ <span class="font-mono text-neon-cyan">
-              {timerSeconds !== null ? formatTime(timerSeconds) : '--:--'}
-            </span>
-          </span>
-        </div>
-
-        <!-- Players -->
-        <div class="grid grid-cols-2 gap-6">
-          <!-- Player 1 -->
-          <div class="p-4 border border-neon-cyan/30 rounded-lg text-center">
-            <div class="text-sm text-gray-400">Player 1</div>
-            <div class="font-mono text-neon-cyan text-xl mt-1">{roomInfo.player1_username}</div>
-            <div class="mt-2 text-xs">
-              {#if myUserId === roomInfo.player1_id}
-                <span class="text-green-400">(You)</span>
-              {/if}
-            </div>
-            <div class="mt-3">
-              {#if myUserId === roomInfo.player1_id}
-                {#if finalSubmitted}
-                  <span class="text-green-400 font-mono text-sm">✅ SUBMITTED</span>
-                {:else if myReady}
-                  <span class="text-green-400 font-mono text-sm">✅ READY</span>
-                {:else}
-                  <span class="text-yellow-400 font-mono text-sm">⏳ NOT READY</span>
-                {/if}
-              {:else}
-                {#if opponentSubmitted}
-                  <span class="text-green-400 font-mono text-sm">✅ SUBMITTED</span>
-                {:else if opponentReady}
-                  <span class="text-green-400 font-mono text-sm">✅ READY</span>
-                {:else}
-                  <span class="text-gray-500 font-mono text-sm">⏳ Waiting...</span>
-                {/if}
-              {/if}
-            </div>
-          </div>
-
-          <!-- Player 2 -->
-          <div class="p-4 border border-neon-magenta/30 rounded-lg text-center">
-            <div class="text-sm text-gray-400">Player 2</div>
-            <div class="font-mono text-neon-magenta text-xl mt-1">{roomInfo.player2_username}</div>
-            <div class="mt-2 text-xs">
-              {#if myUserId === roomInfo.player2_id}
-                <span class="text-green-400">(You)</span>
-              {/if}
-            </div>
-            <div class="mt-3">
-              {#if myUserId === roomInfo.player2_id}
-                {#if finalSubmitted}
-                  <span class="text-green-400 font-mono text-sm">✅ SUBMITTED</span>
-                {:else if myReady}
-                  <span class="text-green-400 font-mono text-sm">✅ READY</span>
-                {:else}
-                  <span class="text-yellow-400 font-mono text-sm">⏳ NOT READY</span>
-                {/if}
-              {:else}
-                {#if opponentSubmitted}
-                  <span class="text-green-400 font-mono text-sm">✅ SUBMITTED</span>
-                {:else if opponentReady}
-                  <span class="text-green-400 font-mono text-sm">✅ READY</span>
-                {:else}
-                  <span class="text-gray-500 font-mono text-sm">⏳ Waiting...</span>
-                {/if}
-              {/if}
-            </div>
-          </div>
-        </div>
+        <BattleArenaHUD
+        roomId={roomId}
+        {roomInfo}
+        {myUserId}
+        {myReady}
+        {opponentReady}
+        {roomStatus}
+        {timerSeconds}
+        problemTitle={problemData?.title ?? null}
+        {finalSubmitted}
+        {opponentSubmitted}
+        />
 
         <!-- Countdown -->
         {#if countdown !== null && !battleStarted}
