@@ -12,6 +12,20 @@ from app.schemas.ai_submission import (
 )
 from app.services.proficiency_service import ProficiencyService
 
+# ---------- Phase 1 imports ----------
+from app.services.enemy_service import (
+    get_enemy_def,
+    compute_enemy_state,
+    compute_damage_and_new_defeats,
+    is_enabled as enemy_battle_enabled,
+)
+from app.services.enemy_progress_service import (
+    get_defeated_test_ids,
+    persist_defeated_test_ids,
+)
+from app.schemas.enemy import EnemyPublicInfo
+# ---------- end Phase 1 imports ----------
+
 import random
 from datetime import date, timedelta
 
@@ -122,6 +136,60 @@ async def submit_mission(
     except Exception as e:
 
         print("Attempt logging failed:", e)
+
+    # ---------- Phase 1: enemy battle state ----------
+    damage_payload = None
+    enemy_payload = None
+
+    if enemy_battle_enabled():
+        try:
+            enemy_def = get_enemy_def(mission_id, mission.get("difficulty"))
+
+            tc_res = (
+                supabase.table("test_cases")
+                .select("id, weight")
+                .eq("mission_id", mission_id)
+                .execute()
+            )
+            test_cases_for_weights = tc_res.data or []
+
+            already_defeated = get_defeated_test_ids(user.id, mission_id)
+
+            state_before = compute_enemy_state(
+                enemy_def, test_cases_for_weights, already_defeated
+            )
+            hp_before = state_before["current_hp"]
+
+            details = test_result.get("details", [])
+            damage_dict, newly_defeated = compute_damage_and_new_defeats(
+                enemy_def=enemy_def,
+                test_cases=test_cases_for_weights,
+                details=details,
+                already_defeated_ids=already_defeated,
+                hp_before=hp_before,
+            )
+
+            canonical_defeated = persist_defeated_test_ids(
+                user.id, mission_id, newly_defeated
+            )
+            state_after = compute_enemy_state(
+                enemy_def, test_cases_for_weights, canonical_defeated
+            )
+
+            damage_payload = damage_dict
+            enemy_payload = {
+                "name": enemy_def["name"],
+                "sprite_key": enemy_def["sprite_key"],
+                "max_hp": enemy_def["max_hp"],
+                "hp_before": hp_before,
+                "hp_after": state_after["current_hp"],
+                "hp_percent": state_after["hp_percent"],
+                "defeated": state_after["defeated"],
+                "is_boss": enemy_def["is_boss"],
+            }
+        except Exception as e:
+            print("Enemy battle computation failed:", e)
+    # ---------- end Phase 1 ----------
 
     # XP SYSTEM
     xp_gained = 0
@@ -270,6 +338,8 @@ async def submit_mission(
             if test_result["success"]
             else "Some tests failed. Try again."
         ),
+        damage=damage_payload,
+        enemy_state=enemy_payload,
     )
 
 @router.get("/{mission_id}")
@@ -388,3 +458,34 @@ async def generate_ai_mission(
             f"AI generation failed: {str(e)}"
         )
 
+
+# ---------- Phase 1: enemy state endpoint ----------
+@router.get("/{mission_id}/enemy", response_model=EnemyPublicInfo)
+async def get_mission_enemy(
+    mission_id: int,
+    user=Depends(get_current_user),
+):
+    """
+    Return current enemy state for this user/mission.
+    Server-derived HP from persisted defeated_test_ids.
+    """
+    mission_res = (
+        supabase.table("missions").select("*").eq("id", mission_id).execute()
+    )
+    if not mission_res.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    mission = mission_res.data[0]
+
+    enemy_def = get_enemy_def(mission_id, mission.get("difficulty"))
+
+    tc_res = (
+        supabase.table("test_cases")
+        .select("id, weight")
+        .eq("mission_id", mission_id)
+        .execute()
+    )
+    test_cases = tc_res.data or []
+
+    defeated = get_defeated_test_ids(user.id, mission_id)
+    state = compute_enemy_state(enemy_def, test_cases, defeated)
+    return EnemyPublicInfo(**state)
