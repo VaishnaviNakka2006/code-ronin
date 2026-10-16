@@ -342,6 +342,33 @@ async def submit_mission(
         enemy_state=enemy_payload,
     )
 
+
+@router.get("/progress/me")
+async def get_my_mission_progress(user=Depends(get_current_user)):
+    """Return completed mission IDs for the authenticated player."""
+    try:
+        result = (
+            supabase.table("user_progress")
+            .select("mission_id")
+            .eq("user_id", str(user.id))
+            .execute()
+        )
+
+        completed_ids = sorted({
+            int(row["mission_id"])
+            for row in (result.data or [])
+            if row.get("mission_id") is not None
+        })
+
+        return {"completed_mission_ids": completed_ids}
+
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load mission progress",
+        )
+
+
 @router.get("/{mission_id}")
 async def get_mission(mission_id: int):
 
