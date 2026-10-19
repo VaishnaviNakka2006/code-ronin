@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from 'svelte';
   import { requireAuth } from '$lib/guards/authGuard';
   
@@ -168,6 +168,13 @@
           class="px-4 py-2 rounded-lg border border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-black transition-all font-mono"
         >
           🎯 INFINITE DOJO
+        </a>
+
+        <a
+          href="/world"
+          class="px-4 py-2 rounded-lg border border-emerald-400 text-emerald-400 hover:bg-emerald-400 hover:text-black transition-all font-mono"
+        >
+          🛣️ MISSION WORLD
         </a>
 
         <button
