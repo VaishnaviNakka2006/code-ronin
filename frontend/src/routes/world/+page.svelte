@@ -3,39 +3,42 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { supabase } from '$lib/supabaseClient';
 
   const missions = [
     {
       id: 1,
-      title: 'The Broken Airlock',
-      subtitle: 'Breach the outer firewall',
+      title: 'Variable Initialization',
+      subtitle: 'Initialize your first variable',
       difficulty: 'EASY',
       xp: 10,
-      boss: 'Firewall Sentinel',
+      boss: 'Training Protocol',
       isBoss: false,
       color: 'cyan'
     },
     {
       id: 2,
-      title: 'Loop the Security Scan',
-      subtitle: 'Survive the infinite loop',
-      difficulty: 'MEDIUM',
-      xp: 20,
-      boss: 'Loop Wraith',
-      isBoss: false,
+      title: 'The Broken Airlock',
+      subtitle: 'Breach the outer firewall',
+      difficulty: 'EASY',
+      xp: 10,
+      boss: 'Firewall Sentinel',
+      isBoss: true,
       color: 'purple'
     },
     {
       id: 3,
       title: 'Corrupted Core',
       subtitle: 'Confront the system overlord',
-      difficulty: 'BOSS',
+      difficulty: 'HARD',
       xp: 50,
       boss: 'Corrupted Core',
       isBoss: true,
       color: 'red'
     }
   ];
+
+
 
   let completedMissionIds: number[] = [];
   let loadingProgress = true;
@@ -65,13 +68,22 @@
         throw new Error('Backend API URL is not configured.');
       }
 
-      const token = localStorage.getItem('access_token');
-
+      
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData.session) {
+        throw new Error('Your login session is unavailable. Please sign in again.');
+      }
+      
+      const token = sessionData.session.access_token;
+      
       const response = await fetch(`${apiUrl}/missions/progress/me`, {
-        headers: token
-          ? { Authorization: `Bearer ${token}` }
-          : {}
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       });
+      
 
       if (!response.ok) {
         throw new Error(
@@ -100,10 +112,26 @@
     }
   }
 
+  
   function deployMission(id: number) {
-    if (!isUnlocked(id)) return;
+    if (loadingProgress) {
+      alert('Campaign progress is still loading. Please wait.');
+      return;
+    }
+
+    if (progressError) {
+      alert('Campaign progress could not load. Please sign in again.');
+      return;
+    }
+
+    if (!isUnlocked(id)) {
+      alert('Complete the previous mission to unlock this one.');
+      return;
+    }
+
     goto(`/mission/${id}`);
   }
+
 
   onMount(() => {
     void loadProgress();
